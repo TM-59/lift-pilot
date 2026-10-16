@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" width="720" height="400" font-family="sans-serif" font-size="12">
+<rect width="720" height="400" fill="#ffffff"/>
+<text x="70" y="26" font-size="16" font-weight="bold" fill="#222">Lift-to-drag ratio vs angle of attack</text>
+<line x1="70.0" y1="44" x2="70.0" y2="344" stroke="#e3e3e3"/>
+<line x1="70" y1="344.0" x2="700" y2="344.0" stroke="#e3e3e3"/>
+<text x="70.0" y="362" text-anchor="middle" fill="#444">-2</text>
+<text x="62" y="348.0" text-anchor="end" fill="#444">-0.882</text>
+<line x1="196.0" y1="44" x2="196.0" y2="344" stroke="#e3e3e3"/>
+<line x1="70" y1="284.0" x2="700" y2="284.0" stroke="#e3e3e3"/>
+<text x="196.0" y="362" text-anchor="middle" fill="#444">2.58</text>
+<text x="62" y="288.0" text-anchor="end" fill="#444">5.35</text>
+<line x1="322.0" y1="44" x2="322.0" y2="344" stroke="#e3e3e3"/>
+<line x1="70" y1="224.0" x2="700" y2="224.0" stroke="#e3e3e3"/>
+<text x="322.0" y="362" text-anchor="middle" fill="#444">7.16</text>
+<text x="62" y="228.0" text-anchor="end" fill="#444">11.6</text>
+<line x1="448.0" y1="44" x2="448.0" y2="344" stroke="#e3e3e3"/>
+<line x1="70" y1="164.0" x2="700" y2="164.0" stroke="#e3e3e3"/>
+<text x="448.0" y="362" text-anchor="middle" fill="#444">11.7</text>
+<text x="62" y="168.0" text-anchor="end" fill="#444">17.8</text>
+<line x1="574.0" y1="44" x2="574.0" y2="344" stroke="#e3e3e3"/>
+<line x1="70" y1="104.0" x2="700" y2="104.0" stroke="#e3e3e3"/>
+<text x="574.0" y="362" text-anchor="middle" fill="#444">16.3</text>
+<text x="62" y="108.0" text-anchor="end" fill="#444">24.1</text>
+<line x1="700.0" y1="44" x2="700.0" y2="344" stroke="#e3e3e3"/>
+<line x1="70" y1="44.0" x2="700" y2="44.0" stroke="#e3e3e3"/>
+<text x="700.0" y="362" text-anchor="middle" fill="#444">20.9</text>
+<text x="62" y="48.0" text-anchor="end" fill="#444">30.3</text>
+<rect x="70" y="44" width="630" height="300" fill="none" stroke="#888"/>
+<text x="385" y="388" text-anchor="middle" fill="#222">alpha [deg]</text>
+<text transform="translate(16 194) rotate(-90)" text-anchor="middle" fill="#222">L/D</text>
+<polyline fill="none" stroke="#9467bd" stroke-width="2" points="70.0,330.4 80.7,306.5 91.4,283.0 102.0,260.1 112.7,237.9 123.4,216.8 134.1,196.8 144.7,178.2 155.4,160.9 166.1,145.1 176.8,130.8 187.5,118.0 198.1,106.7 208.8,96.7 219.5,88.2 230.2,80.9 240.8,74.7 251.5,69.7 262.2,65.7 272.9,62.6 283.6,60.3 294.2,58.8 304.9,57.9 315.6,57.6 326.3,57.9 336.9,58.6 347.6,59.6 358.3,61.1 369.0,62.8 379.7,64.7 390.3,66.9 401.0,69.3 411.7,71.8 422.4,74.4 433.1,77.2 443.7,80.0 454.4,82.9 465.1,85.8 475.8,88.8 486.4,91.7 497.1,94.7 507.8,97.7 518.5,100.7 529.2,103.6 539.8,104.4 550.5,104.9 561.2,108.8 571.9,115.9 582.5,125.9 593.2,138.2 603.9,151.9 614.6,166.5 625.3,181.3 635.9,195.8 646.6,209.6 657.3,222.5 668.0,234.4 678.6,245.2 689.3,254.9 700.0,263.6 "/>
+<rect x="78" y="52" width="12" height="12" fill="#9467bd"/><text x="96" y="63" fill="#222">L/D</text>
+</svg>
