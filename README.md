@@ -3,11 +3,14 @@
 Fly a motor glider in a terminal. A small C11 flight-dynamics simulator: point-mass longitudinal equations integrated with RK4, a parabolic drag polar with stall, and a side-view ASCII cockpit.
 (C言語の飛行力学シミュレータ。端末上でグライダーを操縦して滑走路に軟着陸させます。)
 
+![demo](docs/demo.gif)
+
 ## Run
 
 ```sh
 make && ./lift-pilot            # interactive
 ./lift-pilot --snapshot         # one frame, no terminal needed
+./lift-pilot --gif docs/demo.gif  # scripted landing as an animated GIF
 make test && make plots         # unit tests and docs/*.svg
 docker build -t lift-pilot .    # same, reproducibly
 ```

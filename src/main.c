@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "flight.h"
+#include "gif.h"
 #include "render.h"
 #include "svg.h"
 
@@ -78,6 +79,53 @@ static int snapshot(void)
     return 0;
 }
 
+static int gif_colour(char c)
+{
+    if (c == '=') return 2;
+    if (c == '>' || c == '/' || c == '\\') return 3;
+    if (c == '_' || c == '|') return 4;
+    return 1;
+}
+
+/* Scripted landing: a 4 degree glide from 100 m, with the runway placed where a dry run touches down. */
+static int gif_demo(const char *path)
+{
+    Aircraft a = glider_default();
+    State s = {0.0, 100.0, 0.0, 0.0, 0.0};
+    trim_glide(&a, deg(4.0), &s);
+    State probe = s;
+    Status st = FLYING;
+    while (st == FLYING) {
+        flight_step(&a, &probe, deg(4.0), 0.0, DT);
+        st = check_touchdown(&probe);
+    }
+    double runway_x = probe.x - 100.0;
+
+    unsigned char pal[GIF_COLOURS][3] = {{10, 14, 28}, {235, 235, 235}, {250, 200, 60}, {90, 200, 255},
+                                         {70, 150, 80}};
+    static char buf[RENDER_COLS * RENDER_ROWS * 4];
+    int w = RENDER_COLS * 6 * 3, h = RENDER_ROWS * 9 * 3;
+    static unsigned char px[RENDER_COLS * 6 * 3 * RENDER_ROWS * 9 * 3];
+    Gif *g = gif_open(path, w, h, pal, 6);
+    if (!g) return 1;
+    st = FLYING;
+    for (int k = 0; st == FLYING; k++) {
+        if (k % 50 == 0) {
+            render_frame(&a, &s, runway_x, buf, sizeof buf);
+            gif_draw_text(px, w, h, buf, 3, gif_colour);
+            if (gif_frame(g, px, 0)) return 1;
+        }
+        flight_step(&a, &s, deg(4.0), 0.0, DT);
+        st = check_touchdown(&s);
+    }
+    s.h = 0.0;
+    render_frame(&a, &s, runway_x, buf, sizeof buf);
+    gif_draw_text(px, w, h, buf, 3, gif_colour);
+    if (gif_frame(g, px, 200) || gif_close(g)) return 1;
+    printf("touchdown at x=%.0f m (runway %.0f..%.0f m)\n", s.x, runway_x, runway_x + 300.0);
+    return 0;
+}
+
 static struct termios saved;
 static void restore(void) { tcsetattr(STDIN_FILENO, TCSANOW, &saved); fputs("\033[?25h", stdout); }
 
@@ -138,5 +186,6 @@ int main(int argc, char **argv)
 {
     if (argc > 1 && strcmp(argv[1], "--headless") == 0) return headless(argc > 2 ? argv[2] : ".");
     if (argc > 1 && strcmp(argv[1], "--snapshot") == 0) return snapshot();
+    if (argc > 1 && strcmp(argv[1], "--gif") == 0) return gif_demo(argc > 2 ? argv[2] : "demo.gif");
     return play();
 }
