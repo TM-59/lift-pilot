@@ -1,0 +1,37 @@
+{
+  "checks": 30,
+  "seconds": 72.05667296899999,
+  "equivalence": {
+    "rows": 903,
+    "fields": 18,
+    "maxError": 5.002220859751105e-12,
+    "tolerance": 1e-8
+  },
+  "errors": 0,
+  "externalRequests": 0,
+  "landing": {
+    "time": 93.41999999999855,
+    "x": 2676.4378148221003,
+    "sink": 1.0705061548287056,
+    "status": 1,
+    "onRunway": 1
+  },
+  "manual": {
+    "time": 1.4800000000000009,
+    "command": 5,
+    "throttle": 0.05
+  },
+  "phugoid": {
+    "time": 29.99999999999945,
+    "samples": 139
+  },
+  "screenshots": [
+    "before-terminal.jpg",
+    "landing.jpg",
+    "manual-flight.jpg",
+    "mobile.jpg",
+    "observatory.jpg",
+    "phugoid.jpg",
+    "stall.jpg"
+  ]
+}

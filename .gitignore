@@ -1,3 +1,9 @@
 lift-pilot
 test_flight
 test_gif
+test_observer
+build/
+dist/
+node_modules/
+.env
+__pycache__/

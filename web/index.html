@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f6f5ee">
+  <title>Lift Pilot — a small flight laboratory</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="./" aria-label="Lift Pilot home"><span class="brandmark" aria-hidden="true">↗</span> LIFT <strong>PILOT</strong></a>
+  <span class="eyebrow">A SMALL FLIGHT LABORATORY</span>
+  <a class="about-link" href="#field-notes">How it flies <span aria-hidden="true">↘</span></a>
+</header>
+<main>
+  <section class="intro"><div><p class="eyebrow">01 / THE APPROACH</p><h1>Less engine.<br><em>More understanding.</em></h1></div>
+    <p>Feel the exchange between speed and height.<br>Find a steady glide, then bring it gently home.</p></section>
+  <div class="flight-layout">
+    <section class="flight-panel" aria-label="Flight observation">
+      <div class="view-heading"><span><i class="live-dot" aria-hidden="true"></i> <span id="mode-name">MANUAL APPROACH</span></span><span id="clock">00:00.0</span></div>
+      <div class="scene">
+        <canvas id="scene" width="1080" height="470" role="img" aria-label="Illustrated flight view. Altitude and distance are on the measured plot below."></canvas>
+        <div class="scene-label"><span id="status" role="status">Loading the flight model…</span><small>Illustrated landscape · schematic ground line</small></div>
+        <div id="stall" hidden>STALL — reduce angle of attack</div>
+        <div class="view-corner">STILL AIR<br>LONGITUDINAL FLIGHT</div>
+      </div>
+      <div class="telemetry" aria-label="Flight instruments">
+        <div><span>AIRSPEED</span><strong id="airspeed">—</strong><small>m/s</small></div>
+        <div><span>ALTITUDE</span><strong id="altitude">—</strong><small>m</small></div>
+        <div><span>SINK RATE ↓</span><strong id="sink">—</strong><small>m/s</small></div>
+        <div><span>LIFT / DRAG</span><strong id="ld">—</strong><small>ratio</small></div>
+      </div>
+    </section>
+    <aside class="control-panel" aria-label="Flight controls">
+      <p class="eyebrow">YOUR CONTROLS</p><h2>Small inputs.<br>Watch what follows.</h2>
+      <label for="pitch">Commanded angle of attack <output id="pitch-value" for="pitch">4.0°</output></label>
+      <input id="pitch" type="range" min="-10" max="20" step="0.5" value="4">
+      <div class="range-ends"><span>−10°</span><span>stall at 14.9°</span><span>20°</span></div>
+      <div class="adjust"><button data-adjust="-1" aria-label="Decrease angle of attack">− <kbd>S</kbd></button><button data-adjust="1" aria-label="Increase angle of attack">+ <kbd>W</kbd></button></div>
+      <label for="throttle">Throttle <output id="throttle-value" for="throttle">0%</output></label>
+      <input id="throttle" type="range" min="0" max="100" step="5" value="0">
+      <div class="range-ends"><span>Glide</span><span><kbd>F</kbd> / <kbd>R</kbd></span><span>Full</span></div>
+      <p class="control-note">Pitch commands the angle of attack, not the flight path. Give the aircraft time to respond.</p>
+      <button id="toggle" class="primary" disabled>Start flying <span aria-hidden="true">↗</span></button>
+      <div class="secondary-actions"><button id="reset" disabled>Reset flight</button><span><kbd>P</kbd> pause</span></div>
+      <div class="experiment"><p class="eyebrow">OR WATCH AN EXPERIMENT</p><button id="glide" disabled>Trimmed landing <span aria-hidden="true">→</span></button><button id="phugoid" disabled>Speed ↔ height <span aria-hidden="true">→</span></button><p id="experiment-note">An unpowered approach from 100 m. Land with sink below 2 m/s and a shallow path angle.</p></div>
+    </aside>
+  </div>
+  <section class="analysis-grid" aria-label="Measured physics">
+    <div class="chart-panel"><div class="chart-heading"><h2 id="chart-title">The path you fly</h2><span id="chart-legend"><i class="line-key"></i> Altitude h [m]</span></div><canvas id="plot" width="1080" height="250" role="img" aria-label="Measured altitude in metres versus distance in metres"></canvas><p id="plot-note">Independent axis scales · runway = ochre band · past flight = solid line</p></div>
+    <div class="force-panel"><p class="eyebrow">FORCES / SI UNITS</p><div class="force-row"><span>↑ Lift</span><strong id="lift">—</strong></div><div class="force-row"><span>← Drag</span><strong id="drag">—</strong></div><div class="force-row"><span>Angle of attack α</span><strong id="alpha">—</strong></div><div class="force-row"><span>Flight path γ</span><strong id="gamma">—</strong></div><p>Positive sink means descending.<br>Negative sink means climbing.</p></div>
+  </section>
+  <section id="field-notes" class="field-notes"><p class="eyebrow">FIELD NOTES</p><div><h2>Height is energy in reserve.</h2><p>Raise the nose and speed can become height. Go beyond the stall angle and lift falls while drag rises. The speed–height experiment adds 10% airspeed to a trimmed glide; the measured trace shows the resulting phugoid.</p></div><div><h3>A deliberately small model</h3><p>Point-mass motion, RK4 at 0.02 s, constant air density and a parabolic drag polar. No wind, thermals, roll or pitch-rate dynamics. Flight simulation for exploration; not flight instruction.</p><a href="https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/lift-to-drag-l-d-ratio/" target="_blank" rel="noreferrer">Read about lift / drag at NASA ↗</a></div></section>
+</main>
+<footer><span>LIFT PILOT <span class="muted">/ C11 flight dynamics</span></span><span>Take your time. Keep your airspeed.</span></footer>
+<noscript>This interactive flight laboratory requires JavaScript and WebAssembly. The terminal simulator remains available from the repository.</noscript>
+<script type="module" src="app.mjs"></script>
+</body>
+</html>
