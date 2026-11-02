@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "generator": "tests/story_bench.c (make story)",
+  "note": "Scenes open at fixed progress points: the start of the run and the end of a hop. weir 0 = across the quarry, 1 = round Hob Ridge; mill 0 = the motor pulled, 1 = flown on whole. quiet lists the heavy scenes shown with no 'strip made' banner raised before the next frame of flight. Do not edit by hand.",
+  "seeds": [
+    {"seed": "0", "choices": {"weir": 0, "mill": 0}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-pulled", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "1", "choices": {"weir": 1, "mill": 0}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-pulled", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "2", "choices": {"weir": 0, "mill": 1}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-whole", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "3", "choices": {"weir": 1, "mill": 1}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-whole", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "4", "choices": {"weir": 0, "mill": 0}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-pulled", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "5", "choices": {"weir": 1, "mill": 0}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-pulled", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "6", "choices": {"weir": 0, "mill": 1}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-whole", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "7", "choices": {"weir": 1, "mill": 1}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-whole", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "8", "choices": {"weir": 0, "mill": 0}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-pulled", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "9", "choices": {"weir": 1, "mill": 0}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-pulled", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "10", "choices": {"weir": 0, "mill": 1}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-whole", "quiet": ["buyer", "mill", "doors"]},
+    {"seed": "11", "choices": {"weir": 1, "mill": 1}, "order": ["hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"], "won": true, "ending": "end-whole", "quiet": ["buyer", "mill", "doors"]}
+  ]
+}

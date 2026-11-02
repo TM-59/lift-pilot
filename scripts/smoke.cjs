@@ -113,7 +113,7 @@ async function run() {
   await mobile.getByRole('button',{name:'Pause flight'}).tap();
   check(await mobile.locator('body').evaluate(el=>el.scrollWidth<=innerWidth),'390px has no overflow');
   for(const el of await mobile.locator('button').all()) {
-    const rect=await el.boundingBox();check(rect.width>=44&&rect.height>=44,'buttons have 44px touch target');
+    const rect=await el.boundingBox();if(!rect)continue;check(rect.width>=44&&rect.height>=44,'buttons have 44px touch target');
   }
   await mobile.evaluate(()=>scrollTo(0,0));await capture(mobile,'mobile');await mobileContext.close();
   // Degraded art must not block the physics or produce a synthetic replacement drawing.
@@ -129,11 +129,86 @@ async function run() {
   await broken.goto(origin+'/');await broken.getByText('Flight model unavailable — reload to retry').waitFor();
   check(await broken.locator('#toggle').isDisabled()&&await broken.locator('#pitch').isDisabled(),'WASM failure disables controls');
   await broken.close();
+  const ferryRuns=[];
+  for(const path of [{weir:0,mill:0,shots:true},{weir:1,mill:1,shots:false}]) ferryRuns.push(await flyFerry(context,origin,track,path));
+  const phone=await ferryPhone(browser,origin,track);
   check(errors.length===0,`console/page errors ${errors.join(';')}`);check(external.length===0,'no external requests');
   const result={checks,seconds:(performance.now()-started)/1000,equivalence,errors:errors.length,externalRequests:external.length,
     landing:{time:landing.time,x:landing.x,sink:landing.sink,status:landing.status,onRunway:landing.onRunway},
     manual:{time:manual.time,command:manual.command,throttle:manual.throttle},phugoid:{time:phugoid.time,samples:phugoid.samples},
+    ferry:ferryRuns,phone,
     screenshots:fs.readdirSync('docs/images').filter(file=>file.endsWith('.jpg')).sort()};
   fs.writeFileSync('docs/validation.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result,null,2));
+}
+// The last ferry, flown through the page with real clicks and the real sliders: a simple pilot that reads the
+// glide gauges on screen (motor on when the glide needed is steeper than the glide being made, if there is a motor).
+const ORDER=['hangar','weir','orchard','buyer','mill','doors','coast'];
+const HEAVY=['buyer','mill','doors'];
+async function flyFerry(context,origin,track,path) {
+  const page=await context.newPage();track(page);await ready(page,origin+'/');
+  check((await snapshot(page)).welcome,'welcome card on first load');
+  await page.getByRole('button',{name:'Fly the last ferry',exact:false}).first().click();
+  let snap=await snapshot(page);
+  check(snap.ferry&&snap.sceneId==='hangar'&&snap.sceneText.includes("They're not in the sale."),'the ferry opens in the hangar');
+  if(path.shots)await capture(page,'ferry-hangar');
+  const seen=[],quietAfter=[];let shot=false,frames=0;
+  while(frames++<6000) {
+    snap=await snapshot(page);
+    if(snap.sceneId) {
+      const id=snap.sceneId;
+      if(!seen.length||seen[seen.length-1]!==id) seen.push(id);
+      if(HEAVY.includes(id)) {
+        check(!snap.bannerShown&&await page.locator('#story').evaluate(el=>el.classList.contains('heavy')),`${id} is shown dark with no banner`);
+        if(path.shots&&id==='mill')await capture(page,'ferry-mill');
+      }
+      if(id==='coast') break;
+      const option=id==='weir'?path.weir:id==='mill'?path.mill:0;
+      await page.locator('#story-options button').nth(option).click();
+      if(HEAVY.includes(id)) { await page.clock.runFor(100);const after=await snapshot(page);quietAfter.push(id);check(after.banner!==1&&!after.bannerShown,`no strip-made banner after ${id}`); }
+      continue;
+    }
+    const low=snap.lowOn&&snap.motor&&snap.charge>0;
+    const pitch=low?'6.5':'4.5',throttle=low?'100':'0';
+    if(String(snap.inputCommand)!==pitch)await page.locator('#pitch').fill(pitch);
+    if(snap.motor&&String(Math.round(snap.inputThrottle*100))!==throttle&&await page.locator('#throttle').isEnabled())await page.locator('#throttle').fill(throttle);
+    if(path.shots&&!shot&&snap.hop===1&&snap.x>1200){shot=true;await capture(page,'ferry-flight');}
+    await page.clock.runFor(1000);
+  }
+  snap=await snapshot(page);
+  check(snap.sceneId==='coast','the ferry reaches the coast');
+  check(JSON.stringify(seen)===JSON.stringify(ORDER),`scenes in order: ${seen.join(',')}`);
+  check(snap.heavyLog.map(h=>h.id).join()===HEAVY.join()&&snap.heavyLog.every(h=>!h.bannerShown&&h.banner!==1),'heavy scenes logged quiet');
+  const ending=path.mill===0?'reading glasses':'logbook under your arm';
+  check(snap.sceneText.includes(ending),`ending for mill=${path.mill}`);
+  check(snap.pulled===path.mill&&snap.route===path.weir,'choices reached C');
+  if(path.shots)await capture(page,'ferry-ending');
+  const result={path:{weir:path.weir,mill:path.mill},scenes:seen.length,time:+snap.time.toFixed(1),outlandings:snap.outlandings,trailered:snap.trailered,low:+snap.low.toFixed(1)};
+  await page.getByRole('button',{name:'Start again'}).click();
+  check((await snapshot(page)).sceneId==='hangar','start again returns to the hangar');
+  await page.close();return result;
+}
+// Phone-sized, touch only: the welcome card, the first scene and its answer are readable and tappable.
+async function ferryPhone(browser,origin,track) {
+  const out={};
+  for(const [name,viewport] of [['portrait',{width:375,height:812}],['landscape',{width:812,height:375}]]) {
+    const ctx=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:true,hasTouch:true});
+    const page=await ctx.newPage();track(page);await ready(page,origin+'/');
+    await page.locator('#welcome-start').tap();
+    const sizes=await page.evaluate(()=>{
+      const fonts=[...document.querySelectorAll('#story-text p,#story-options button,#story h3')].map(el=>parseFloat(getComputedStyle(el).fontSize));
+      const targets=[...document.querySelectorAll('#story-options button')].map(el=>{const r=el.getBoundingClientRect();return Math.min(r.width,r.height)});
+      const c=document.getElementById('scene').getBoundingClientRect();
+      return {font:Math.min(...fonts),target:Math.min(...targets),area:+(Math.min(c.width,innerWidth)*Math.min(c.height,innerHeight)/(innerWidth*innerHeight)).toFixed(3),
+        overflow:document.documentElement.scrollWidth>innerWidth};
+    });
+    check(sizes.font>=14&&sizes.target>=44&&!sizes.overflow&&sizes.area>=.5,`${name}: scene text ${sizes.font}px, answers ${sizes.target}px, view ${sizes.area}`);
+    await page.locator('#story-options button').first().tap();
+    await page.clock.runFor(2000);
+    const snap=await snapshot(page);
+    check(snap.hop===0&&!snap.sceneId&&snap.time>1&&await page.evaluate(()=>window.__tmGate.goal()),`${name}: one tap takes off`);
+    if(name==='portrait')await capture(page,'mobile-ferry');
+    out[name]=sizes;await ctx.close();
+  }
+  return out;
 }
 run().catch(error=>{console.error(error);process.exitCode=1}).finally(async()=>{if(browser)await browser.close();server.close()});
