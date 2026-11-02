@@ -132,11 +132,12 @@ async function run() {
   const ferryRuns=[];
   for(const path of [{weir:0,mill:0,shots:true},{weir:1,mill:1,shots:false}]) ferryRuns.push(await flyFerry(context,origin,track,path));
   const phone=await ferryPhone(browser,origin,track);
+  const guide=await guideCheck(browser,origin,track);
   check(errors.length===0,`console/page errors ${errors.join(';')}`);check(external.length===0,'no external requests');
   const result={checks,seconds:(performance.now()-started)/1000,equivalence,errors:errors.length,externalRequests:external.length,
     landing:{time:landing.time,x:landing.x,sink:landing.sink,status:landing.status,onRunway:landing.onRunway},
     manual:{time:manual.time,command:manual.command,throttle:manual.throttle},phugoid:{time:phugoid.time,samples:phugoid.samples},
-    ferry:ferryRuns,phone,
+    ferry:ferryRuns,phone,guide,
     screenshots:fs.readdirSync('docs/images').filter(file=>file.endsWith('.jpg')).sort()};
   fs.writeFileSync('docs/validation.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result,null,2));
 }
@@ -209,6 +210,61 @@ async function ferryPhone(browser,origin,track) {
     if(name==='portrait')await capture(page,'mobile-ferry');
     out[name]=sizes;await ctx.close();
   }
+  return out;
+}
+// The goal and the next step (bug #10): always on screen above the view, 14 CSS px or larger, the same words as
+// __tmGate.objective()/hint(), and never over the view, the instruments, the quick controls or the alerts.
+async function guideCheck(browser,origin,track) {
+  const out={};
+  const measure=page=>page.evaluate(()=>{
+    const R=el=>el.getBoundingClientRect(),g=document.getElementById('guide'),rg=R(g);
+    const hit=(a,b)=>a.left<b.right-.5&&b.left<a.right-.5&&a.top<b.bottom-.5&&b.top<a.bottom-.5;
+    const others=['scene','lab-telemetry','ferry-telemetry','.quick','.alerts','.control-panel']
+      .map(sel=>sel[0]==='.'?document.querySelector(sel):document.getElementById(sel)).filter(el=>el&&el.getClientRects().length);
+    const quick=[...document.querySelectorAll('.quick button')].filter(el=>el.getClientRects().length).map(R);
+    return {goal:document.getElementById('goal-line').textContent,next:document.getElementById('next-step').textContent,
+      hook:window.__tmGate.objective()===document.getElementById('goal-line').textContent&&window.__tmGate.hint()===document.getElementById('next-step').textContent,
+      font:Math.min(...[...g.querySelectorAll('span')].map(el=>parseFloat(getComputedStyle(el).fontSize))),
+      overlaps:others.filter(el=>hit(rg,R(el))).length,inView:rg.top>=0&&rg.bottom<=innerHeight,
+      quick:quick.length,quickInView:quick.every(r=>r.bottom<=innerHeight&&r.width>=44&&r.height>=44),
+      target:window.liftView.snapshot.guide.target,next2:window.__tmGate.nextTarget()};
+  });
+  const pitch=(page,value)=>page.evaluate(v=>{const el=document.getElementById('pitch');el.value=v;el.dispatchEvent(new Event('input'))},value);
+  for(const [name,viewport] of [['portrait',{width:375,height:812}],['landscape',{width:812,height:375}],['small-landscape',{width:667,height:375}],['desktop',{width:1440,height:1000}]]) {
+    const phone=name!=='desktop';
+    const ctx=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:phone,hasTouch:phone});
+    const page=await ctx.newPage();track(page);await ready(page,origin+'/');
+    const states={welcome:await measure(page)};
+    await page.locator('#welcome-start').click();states.scene=await measure(page);
+    await page.locator('#story-options button').first().click();await page.clock.runFor(2000);states.glide=await measure(page);
+    for(let i=0;i<40&&!(await snapshot(page)).lowOn;i++){await pitch(page,12);await page.clock.runFor(1000);}
+    states.low=await measure(page);
+    await pitch(page,20);await page.clock.runFor(1500);states.stall=await measure(page);
+    if(name==='portrait'){
+      await capture(page,'mobile-guide');
+      // Scrolled down to the instruments, the goal and the next step stay pinned at the top of the screen.
+      const pinned=await page.evaluate(()=>{scrollTo(0,420);const r=document.getElementById('guide').getBoundingClientRect();const top=r.top;scrollTo(0,0);return top>=0&&r.bottom<=innerHeight});
+      check(pinned,'portrait: the guide stays on screen when the page is scrolled');
+    }
+    for(const [state,m] of Object.entries(states)) {
+      check(m.hook&&m.goal&&m.next,`${name} ${state}: goal and next step shown and equal to the hook`);
+      check(m.font>=14&&m.inView&&m.overlaps===0,`${name} ${state}: guide ${m.font}px, in view ${m.inView}, overlaps ${m.overlaps}`);
+      if(name==='portrait')check(m.quick===4&&m.quickInView,`${name} ${state}: quick controls on screen`);
+    }
+    check(states.welcome.target==='welcome'&&states.scene.target==='answer','first steps point at the welcome button and the answer');
+    check(states.low.target==='motor-full'&&/Motor 100%/.test(states.low.next),`${name}: LOW asks for the motor (${states.low.next})`);
+    check(states.stall.target==='down'&&/nose down/.test(states.stall.next)&&states.stall.next2,`${name}: a stall asks for nose down`);
+    out[name]=Object.fromEntries(Object.entries(states).map(([k,m])=>[k,m.next]));
+    await ctx.close();
+  }
+  // Every branch of the next step in the laboratory: start, flying, a hard landing.
+  const ctx=await browser.newContext({viewport:{width:375,height:812},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+  const page=await ctx.newPage();track(page);await ready(page,origin+'/');
+  await page.getByRole('button',{name:'Open the flight laboratory instead'}).tap();
+  const start=await measure(page);check(/Start flying/.test(start.next)&&start.target==='toggle','lab: start flying first');
+  await pitch(page,-10);await page.locator('#toggle').tap();await page.clock.runFor(30000);
+  const hard=await measure(page);check(/Hard landing/.test(hard.next)&&hard.hook,'lab: a hard landing says what to change');
+  out.lab={start:start.next,hard:hard.next};await ctx.close();
   return out;
 }
 run().catch(error=>{console.error(error);process.exitCode=1}).finally(async()=>{if(browser)await browser.close();server.close()});

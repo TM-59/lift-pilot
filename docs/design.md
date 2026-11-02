@@ -56,6 +56,17 @@ touched. With no story numbers the strips are 600 m long, in still air, at 2,500
 darken the flight view; no "strip made" banner is raised for the hop that leads to them, nor in the
 frame after they close (`[quiet]` in `tests/test_ferry.c`, `quiet` in every play-order seed).
 
+## The goal and the next step
+
+`guide()` in `web/app.mjs` turns the C state into two lines above the view: the goal (where to land,
+how far, the strip length; in the laboratory the runway and the 2 m/s limit) and the next step. The
+next step is the first that applies of: paused, stall (nose down), past the strip end, near the
+strip and low with sink over 1.8 m/s (flare: nose up), on final with the motor running (motor off),
+on final, LOW with battery (Motor 100%), climbing on the motor, LOW without a motor, the motor
+running with height in hand (motor off), the nose above 9° or below 1° (back toward 4°), gliding
+well. The control it names gets `.next-target`: the phone's quick row when it is on screen, else the
+control panel. Only words come from JavaScript; every number is read from C.
+
 ## Screen states (`window.__tmGate.scene()`)
 
 `loading` → `title` (welcome card) → `scene:<id>` ↔ `play` / `paused` → `scene:coast` → `done`.
@@ -65,17 +76,18 @@ The laboratory uses `play` / `paused` / `done` without scenes.
 
 | Action | Keyboard | Pointer / touch |
 |---|---|---|
-| Angle of attack | W / S (±1°) | slider, − / + buttons |
-| Throttle | R / F (±5 %) | slider (disabled with no motor or a flat battery) |
+| Angle of attack | W / S (±1°) | slider, − / + buttons, the quick row's − Nose / + Nose (upright phones) |
+| Throttle | R / F (±5 %) | slider, the quick row's Motor 0% / Motor 100% (disabled with no motor or a flat battery) |
 | Pause / resume | P | the main button |
 | Scene answers | — | buttons in the scene panel |
 
 ## Test hook
 
 `window.__tmGate`: `version`, `logical` (the scene canvas's CSS size), `scene()`, `goal()` (the
-hangar answered and the Kestrel airborne), `objective()`, `texts()` and `targets()` empty (all words
-and targets are DOM or canvas text the gate measures directly), `player()` null, `hint()` (the
-welcome button, the open scene's first answer, or Resume). `window.liftView.snapshot` exposes the C
+hangar answered and the Kestrel airborne), `objective()` and `hint()` (the words of `#goal-line` and
+`#next-step`), `texts()` and `targets()` empty (all words and targets are DOM or canvas text the gate
+measures directly), `player()` null, `nextTarget()` (the centre of the outlined control the next step
+names: the welcome button, the open scene's first answer, Resume, nose up/down or the motor). `window.liftView.snapshot` exposes the C
 state, the open scene, banner and heavy-scene log for the smoke test.
 
 ## Known limits

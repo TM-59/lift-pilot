@@ -1,6 +1,6 @@
 {
-  "checks": 63,
-  "seconds": 735.2111943240001,
+  "checks": 127,
+  "seconds": 1105.892569195,
   "equivalence": {
     "rows": 903,
     "fields": 18,
@@ -17,7 +17,7 @@
     "onRunway": 1
   },
   "manual": {
-    "time": 1.5000000000000009,
+    "time": 1.540000000000001,
     "command": 5,
     "throttle": 0.05
   },
@@ -32,7 +32,7 @@
         "mill": 0
       },
       "scenes": 7,
-      "time": 1218.9,
+      "time": 1203.3,
       "outlandings": 9,
       "trailered": 3,
       "low": 10.8
@@ -43,10 +43,10 @@
         "mill": 1
       },
       "scenes": 7,
-      "time": 1058.9,
+      "time": 1055.9,
       "outlandings": 9,
       "trailered": 3,
-      "low": 312.4
+      "low": 308.7
     }
   ],
   "phone": {
@@ -59,8 +59,42 @@
     "landscape": {
       "font": 14,
       "target": 46,
-      "area": 0.644,
+      "area": 0.573,
       "overflow": false
+    }
+  },
+  "guide": {
+    "portrait": {
+      "welcome": "Tap “Fly the last ferry” to begin.",
+      "scene": "Read on, then tap “Take off”.",
+      "glide": "Gliding well: hold about 4° and watch for LOW.",
+      "low": "LOW: you can't glide to the strip. Motor 100% (R) to climb.",
+      "stall": "Stalling: nose down (− / S) until below 14.9°."
+    },
+    "landscape": {
+      "welcome": "Tap “Fly the last ferry” to begin.",
+      "scene": "Read on, then tap “Take off”.",
+      "glide": "Gliding well: hold about 4° and watch for LOW.",
+      "low": "LOW: you can't glide to the strip. Motor 100% (R) to climb.",
+      "stall": "Stalling: nose down (− / S) until below 14.9°."
+    },
+    "small-landscape": {
+      "welcome": "Tap “Fly the last ferry” to begin.",
+      "scene": "Read on, then tap “Take off”.",
+      "glide": "Gliding well: hold about 4° and watch for LOW.",
+      "low": "LOW: you can't glide to the strip. Motor 100% (R) to climb.",
+      "stall": "Stalling: nose down (− / S) until below 14.9°."
+    },
+    "desktop": {
+      "welcome": "Tap “Fly the last ferry” to begin.",
+      "scene": "Read on, then tap “Take off”.",
+      "glide": "Gliding well: hold about 4° and watch for LOW.",
+      "low": "LOW: you can't glide to the strip. Motor 100% (R) to climb.",
+      "stall": "Stalling: nose down (− / S) until below 14.9°."
+    },
+    "lab": {
+      "start": "Tap “Start flying”, then set the nose with − / +; 4° glides best.",
+      "hard": "Hard landing (sink 2 m/s or more). Tap “Fly again”; flare (+) low down."
     }
   },
   "screenshots": [
@@ -72,6 +106,7 @@
     "landing.jpg",
     "manual-flight.jpg",
     "mobile-ferry.jpg",
+    "mobile-guide.jpg",
     "mobile.jpg",
     "observatory.jpg",
     "phugoid.jpg",

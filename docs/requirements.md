@@ -20,8 +20,15 @@ Written from the code, the tests and the bench output. Numbers come from `src/`,
 |---|---|---|
 | PC | Keyboard | W/S angle of attack, R/F throttle, P pause (laboratory and ferry) |
 | PC / phone | Pointer / touch | Sliders and the − / + buttons set the angle of attack and throttle; every scene answer, start, pause and reset is a button |
-| Phone, upright | Touch only | The flight view comes first and fills about 62 % of the screen height; controls and instruments follow |
+| Phone, upright | Touch only | The goal and the next step, then the flight view (about 62 % of the screen height), then a quick row (− Nose, + Nose, Motor 0%, Motor 100%) on screen; the full controls and instruments follow |
 | Phone, sideways | Touch only | The flight view on the left at the screen height, controls and the ferry brief on the right |
+
+Above the flight view, on every device, two lines say the goal (`GOAL`: where to land, how far,
+the strip length) and the next step (`NEXT`): what to do now and with which control, chosen from
+the C state (stall, near the ground and sinking, LOW with or without battery, the motor still
+running, the nose far from 4°, paused, a scene to answer, a hard landing). The control it names
+is outlined. The instruments carry words as well as units (`under 2 m/s to land`,
+`m forward per m down`, `LOW when needed > made`).
 
 Everything can be started and finished without a keyboard. There is no persistence, sound
 or server API. The browser downloads only local files.
@@ -52,6 +59,17 @@ or server API. The browser downloads only local files.
 | ⑤ Targets | every target 44×44 CSS px or larger (buttons, links, sliders, labels) |
 | ⑥ Orientation | no sideways overflow; the flight view covers half the screen or more |
 | ⑦ Direction | not applicable: the flight is longitudinal, there is no screen direction to steer |
+
+### The goal and the next step (bug #10, `make smoke` → `guide`)
+
+| Condition | Measured on |
+|---|---|
+| `GOAL` and `NEXT` are shown and equal `__tmGate.objective()` / `hint()` | welcome, scene, gliding, LOW, stall × 375×812, 812×375, 667×375, 1440×1000 |
+| 14 CSS px or larger, inside the screen, over none of the view, instruments, quick row, alerts or control panel | the same 20 states |
+| the quick row (4 buttons, 44 CSS px or larger) is on screen without scrolling | 375×812 |
+| LOW asks for Motor 100%, a stall for nose down, the laboratory's start and hard landing say what to do | each orientation and the laboratory |
+
+A first-time reader's understanding is judged by these, not by the local VLM playtest (a reference value).
 
 ## Not verified
 

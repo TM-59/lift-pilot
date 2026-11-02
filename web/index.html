@@ -20,11 +20,15 @@
   <div class="flight-layout">
     <section class="flight-panel" aria-label="Flight observation">
       <div class="view-heading"><span><i class="live-dot" aria-hidden="true"></i> <span id="mode-name">MANUAL APPROACH</span></span><span id="clock">00:00.0</span></div>
+      <div class="guide" id="guide">
+        <p><span class="guide-key">GOAL</span> <span id="goal-line">Loading the flight model…</span></p>
+        <p><span class="guide-key">NEXT</span> <span id="next-step" aria-live="polite">Wait a moment.</span></p>
+      </div>
       <div class="scene">
         <canvas id="scene" width="1080" height="470" role="img" aria-label="Illustrated flight view. Altitude and distance are on the measured plot below."></canvas>
         <div class="scene-label"><span id="status" role="status">Loading the flight model…</span><small id="scene-caption">Illustrated landscape · schematic ground line</small></div>
-        <div id="stall" hidden>STALL — reduce angle of attack</div>
-        <div id="low" hidden>LOW — you won't make the strip at this glide</div>
+        <div class="alerts"><div id="low" hidden>LOW — you won't make the strip at this glide</div>
+          <div id="stall" hidden>STALL — reduce angle of attack</div></div>
         <div id="banner" hidden></div>
         <div class="view-corner" id="view-corner">STILL AIR · LONGITUDINAL FLIGHT</div>
         <div id="welcome" hidden>
@@ -40,15 +44,19 @@
           <div id="story-options"></div>
         </div>
       </div>
+      <div class="quick" aria-label="Quick controls">
+        <button data-adjust="-1" aria-label="Nose down">− Nose</button><button data-adjust="1" aria-label="Nose up">+ Nose</button>
+        <button data-motor="0" aria-label="Motor off">Motor 0%</button><button data-motor="1" aria-label="Motor full">Motor 100%</button>
+      </div>
       <div class="telemetry" id="lab-telemetry" aria-label="Flight instruments">
         <div><span>AIRSPEED</span><strong id="airspeed">—</strong><small>m/s</small></div>
         <div><span>ALTITUDE</span><strong id="altitude">—</strong><small>m</small></div>
-        <div><span>SINK RATE ↓</span><strong id="sink">—</strong><small>m/s</small></div>
-        <div><span>LIFT / DRAG</span><strong id="ld">—</strong><small>ratio</small></div>
+        <div><span>SINK RATE ↓</span><strong id="sink">—</strong><small>m/s</small><small class="note">under 2 m/s to land</small></div>
+        <div><span>LIFT / DRAG</span><strong id="ld">—</strong><small>ratio</small><small class="note">m forward per m down</small></div>
       </div>
       <div class="telemetry ferry-only" id="ferry-telemetry" aria-label="Ferry instruments">
         <div><span>TO THE STRIP</span><strong id="f-strip">—</strong><small>km</small></div>
-        <div id="glide-cell"><span>GLIDE NEEDED / MADE</span><strong id="f-glide">—</strong></div>
+        <div id="glide-cell"><span>GLIDE NEEDED / MADE</span><strong id="f-glide">—</strong><small class="note">m forward per m down · LOW when needed &gt; made</small></div>
         <div><span>BATTERY</span><strong id="f-charge">—</strong><small id="f-charge-unit">s of motor</small></div>
         <div><span>ALTITUDE · AIRSPEED</span><strong id="f-height">—</strong><small id="f-speed">—</small></div>
       </div>
@@ -56,11 +64,11 @@
     <aside class="control-panel" aria-label="Flight controls">
       <p class="eyebrow" id="controls-eyebrow">YOUR CONTROLS</p><h2 id="controls-title">Small inputs.<br>Watch what follows.</h2>
       <div class="ferry-only ferry-brief"><p id="hop-name">HOP 1 / 5</p><p id="hop-air"></p><p id="hop-tally"></p></div>
-      <label for="pitch">Commanded angle of attack <output id="pitch-value" for="pitch">4.0°</output></label>
+      <label for="pitch">Nose: angle of attack <output id="pitch-value" for="pitch">4.0°</output></label>
       <input id="pitch" type="range" min="-10" max="20" step="0.5" value="4">
       <div class="range-ends"><span>−10°</span><span>stall at 14.9°</span><span>20°</span></div>
       <div class="adjust"><button data-adjust="-1" aria-label="Decrease angle of attack">− <kbd>S</kbd></button><button data-adjust="1" aria-label="Increase angle of attack">+ <kbd>W</kbd></button></div>
-      <label for="throttle" id="throttle-label">Throttle <output id="throttle-value" for="throttle">0%</output></label>
+      <label for="throttle" id="throttle-label">Motor (throttle) <output id="throttle-value" for="throttle">0%</output></label>
       <input id="throttle" type="range" min="0" max="100" step="5" value="0">
       <div class="range-ends"><span>Glide</span><span><kbd>F</kbd> / <kbd>R</kbd></span><span>Full</span></div>
       <p class="control-note" id="control-note">Pitch commands the angle of attack, not the flight path. Give the aircraft time to respond.</p>
