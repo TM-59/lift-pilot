@@ -47,3 +47,17 @@ The art-material proxy score does not evaluate aesthetic quality or educational 
 Human first-play evaluation, actual iPhone/Safari/other-browser compatibility, real-GPU
 performance, real-time long sessions, publication and external submission are unverified.
 There is no audio, persistence or server API to migrate. No deployment was performed.
+
+## M5: The Last Ferry and phone play (2026-11-03)
+
+| Check | Result |
+|---|---|
+| `make test` (Debian 13, gcc 14.2) | existing tests unchanged; `test_ferry`: still air with no story numbers equals `flight_step` for 1,500 frames, scene order in 12 seeds, 7 `[mech]`, 3 `[quiet]`, 2 `[choice]`; story bench check 8 rows verbatim, all run keys distinct |
+| `make story-check` / `make plots` | full regeneration byte-identical; CSV/SVG/GIF unchanged |
+| `make smoke` | 63 checks, page errors 0, external requests 0; the ferry flown twice through the page with real clicks and sliders (quarry + motor out, ridge + whole), 7 scenes in order, heavy scenes with no banner, both endings; 375×812 and 812×375 touch: scene text 14 px, answers 46 px, view 58 % / 64 % |
+| Playability gate | 2/7 → 7/7 |
+| `make web` | 7 files, 925,968 B |
+
+The smoke's own pilot is crude (two fixed pitch settings and the motor on LOW) and outlanded
+9 times in each run; it checks the page, not the difficulty. Difficulty is measured by the story
+bench's pilot in `docs/narrative/tension.json`. A human first play is not verified.

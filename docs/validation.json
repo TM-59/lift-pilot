@@ -1,6 +1,6 @@
 {
-  "checks": 30,
-  "seconds": 72.05667296899999,
+  "checks": 63,
+  "seconds": 735.2111943240001,
   "equivalence": {
     "rows": 903,
     "fields": 18,
@@ -17,7 +17,7 @@
     "onRunway": 1
   },
   "manual": {
-    "time": 1.4800000000000009,
+    "time": 1.5000000000000009,
     "command": 5,
     "throttle": 0.05
   },
@@ -25,10 +25,53 @@
     "time": 29.99999999999945,
     "samples": 139
   },
+  "ferry": [
+    {
+      "path": {
+        "weir": 0,
+        "mill": 0
+      },
+      "scenes": 7,
+      "time": 1218.9,
+      "outlandings": 9,
+      "trailered": 3,
+      "low": 10.8
+    },
+    {
+      "path": {
+        "weir": 1,
+        "mill": 1
+      },
+      "scenes": 7,
+      "time": 1058.9,
+      "outlandings": 9,
+      "trailered": 3,
+      "low": 312.4
+    }
+  ],
+  "phone": {
+    "portrait": {
+      "font": 14,
+      "target": 46,
+      "area": 0.577,
+      "overflow": false
+    },
+    "landscape": {
+      "font": 14,
+      "target": 46,
+      "area": 0.644,
+      "overflow": false
+    }
+  },
   "screenshots": [
     "before-terminal.jpg",
+    "ferry-ending.jpg",
+    "ferry-flight.jpg",
+    "ferry-hangar.jpg",
+    "ferry-mill.jpg",
     "landing.jpg",
     "manual-flight.jpg",
+    "mobile-ferry.jpg",
     "mobile.jpg",
     "observatory.jpg",
     "phugoid.jpg",

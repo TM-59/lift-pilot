@@ -1,1 +1,11 @@
 .git
+node_modules
+build
+dist
+lift-pilot
+test_flight
+test_gif
+test_observer
+test_ferry
+story_bench
+.story-check

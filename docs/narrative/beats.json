@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "arc": "Man in a hole: the club's last motor glider leaves Upper Field on her ferry flight (0, quiet), a choice of lines past the quarry (-1), the orchard and a letter that says children will learn on her (+2, a false peak), a second letter: the buyer breaks aircraft for parts (-2), Joost offers to take her motor out at Mill Strip (-3, the bottom at 0.67), the hangar doors are gone and the sea breeze is up (-2), the breaker's yard (+1, bittersweet).",
+  "note": "Scenes open in src/ferry.c at fixed progress points (the start of the run and the end of each of the five hops); the words are in web/app.mjs. The flight model in src/flight.c is unchanged; story beats change only the battery charge, where the next strip is and how long it is, the air the hop is flown through (a uniform wind and vertical air motion added to the position after each unchanged RK4 step), the start height and, once, the aircraft's drag and motor. The actual order per seed is in play-order.json, story numbers on/off and per choice path in ablation.json, per-hop crises and outlandings in tension.json, all written by make story. tests/test_ferry.c checks the order, every [mech] number, the [quiet] heavy scenes (buyer, mill, doors) and both choices; make test re-runs bench rows and requires them verbatim. Emotion values are the author's self-scoring; an independent review has not been done.",
+  "characters": [
+    {"id": "joost", "want": "keep the Kestrel flying; he fitted her motor himself", "need": "to let her go to someone else", "start": "fills her battery with his own cells and goes back inside before she leaves the grass", "end": "either keeps the motor on his bench and starts on something, or stops answering his phone"},
+    {"id": "ros", "want": "everyone fed and nobody shouting", "need": "to say the hard thing to her brother", "start": "jokes about Joost and reads the school's letter aloud like good news", "end": "asks Joost what he is going to put the motor in, and tells the pilot about the hangar doors herself"}
+  ],
+  "beats": [
+    {"id": "hangar", "chapter": 1, "summary": "Upper Field before sunrise. The club is closed and the Kestrel is sold to a flight school on the coast; this is her ferry flight, five hops down the valley. Joost has put his own spare cells behind the seat (battery 5 to 26 s of motor), gives the rule 'height first' and goes back into the hangar before she is airborne.",
+     "valence": 0, "intensity": 1, "emotion": "sorrow", "tags": ["reward", "quiet"], "setup": ["s-rule", "s-school", "s-motor"],
+     "mechanism": {"state": "FE_CELLS", "test": "[mech] hangar"}, "evidence": "They're not in the sale."},
+    {"id": "weir", "chapter": 1, "summary": "Ros on the radio from the orchard: the quarry is blasting and the air over the pit sinks, but it is the short way; Hob Ridge is long and safe, with a higher climb-out along the slope.",
+     "valence": -1, "intensity": 2, "emotion": "fear", "tags": ["choice", "cost"],
+     "choice": {"options": 2, "changes": ["orchard"], "labels": ["Cut across the quarry (the short way, sinking air)", "Go round Hob Ridge (the long way, a higher climb-out)"]},
+     "mechanism": {"state": "route", "test": "[mech] weir"}, "evidence": "goes down like a bucket in a well"},
+    {"id": "orchard", "chapter": 2, "summary": "Ros feeds the pilot while her solar panels top up the battery (+15 s of motor) and reads the school's letter aloud: students will start circuits in the Kestrel on Friday. Joost, on the phone, almost laughs.",
+     "valence": 2, "intensity": 2, "emotion": "joy", "tags": ["reward", "peak"], "payoff": ["s-school"],
+     "mechanism": {"state": "FE_ORCHARD", "test": "[mech] orchard"}, "evidence": "Students will begin circuits on Friday."},
+    {"id": "buyer", "chapter": 2, "summary": "A second letter, to Joost: there is no school. The buyer resells engines and instruments and the airframe will be disposed of. Joost is quiet, then angry; the money already paid the club's debts. The valley wind gets up for the rest of the way.",
+     "valence": -2, "intensity": 3, "emotion": "anger", "tags": ["punishment", "twist"], "setup": ["s-disposed"],
+     "mechanism": {"state": "FE_WIND", "test": "[mech] buyer"},
+     "presentation": {"quiet": true, "test": "[quiet] buyer"},
+     "evidence": "The airframe will be disposed of."},
+    {"id": "mill", "chapter": 3, "summary": "Joost has driven down to Mill Strip with his toolbox: the contract says one motor glider, not what is in her. Let him take the motor out (the rest of the way on the mill's winch, no motor to fix a mistake) or fly her on whole as she was sold. Ros asks him what he is going to put it in.",
+     "valence": -3, "intensity": 3, "emotion": "sorrow", "tags": ["loss", "choice"], "irreversible": true, "payoff": ["s-motor"],
+     "choice": {"options": 2, "changes": ["doors", "coast"], "labels": ["Let Joost take the motor out (the mill's winch, then no motor)", "Fly her on as she was sold (the motor stays in)"]},
+     "mechanism": {"state": "pulled", "test": "[mech] mill"},
+     "presentation": {"quiet": true, "test": "[quiet] mill"},
+     "evidence": "It doesn't say what's in her."},
+    {"id": "doors", "chapter": 4, "summary": "At Ferry Point Ros calls: the hangar doors at Upper Field went for scrap this morning, and Joost is sitting where the Kestrel used to stand. He sent one message: the yard is short and the sea breeze is on the nose, height first. The last hop has the sea breeze and a 250 m yard.",
+     "valence": -2, "intensity": 2, "emotion": "sorrow", "tags": ["loss", "punishment", "quiet"], "irreversible": true, "payoff": ["s-rule"],
+     "mechanism": {"state": "FE_DOORS", "test": "[mech] doors"},
+     "presentation": {"quiet": true, "test": "[quiet] doors"},
+     "evidence": "They took the hangar doors off this morning."},
+    {"id": "coast", "chapter": 5, "summary": "The breaker's yard on the coast; the ending depends on whether Joost took the motor out.",
+     "valence": 1, "intensity": 2, "emotion": "relief", "tags": ["quiet"], "payoff": ["s-disposed"],
+     "evidence": "The breaker walks round her twice"}
+  ],
+  "endings": [
+    {"id": "end-pulled", "when": {"mill": 0}, "text": [
+      "The breaker walks round her twice and asks where the engine is. You hand him the papers. One motor glider.",
+      "He pays half and takes the wings anyway.",
+      "On the train home Ros sends a photo: Joost at the mill bench with the motor clamped in front of him and his reading glasses on. No caption."]},
+    {"id": "end-whole", "when": {"mill": 1}, "text": [
+      "The breaker walks round her twice and has the cowling off before you've unstrapped.",
+      "The club's debts are paid to the last cent.",
+      "You walk to the station with her logbook under your arm. Nobody asked for it. Joost doesn't answer his phone that night, or the next."]}
+  ]
+}

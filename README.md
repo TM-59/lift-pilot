@@ -7,6 +7,30 @@ point-mass longitudinal equations, RK4 integration and parabolic drag polar with
 
 ![Browser flight laboratory, captured from the running WASM build](docs/images/observatory.jpg)
 
+## The Last Ferry
+
+![The hangar at Upper Field, the first scene](docs/images/ferry-hangar.jpg)
+
+The club is closed and its last motor glider, the Kestrel, has been sold to a flight school on
+the coast. Fly her down the valley in five hops, strip to strip, with Joost's spare cells in the
+battery. Start it with **Fly the last ferry** on the welcome card or in the controls.
+
+- Same flight model and controls as the laboratory. Each hop starts at the top of the climb-out
+  and ends with a landing; land on the strip with sink below 2 m/s. Short, long or hard is an
+  outlanding: the hop is flown again, and the third outlanding in a hop ends it on a trailer.
+- Two needles tell you whether you will make it: the **glide needed** to reach the strip
+  (distance over energy height) and the **glide made** over the ground. LOW lights while the first
+  is steeper than the second. The motor climbs while the battery lasts.
+- Story scenes open at the end of each hop and change only game numbers: the battery, where the
+  strip is and how long, the air (a uniform headwind or sinking air carries the whole air mass),
+  and, if you let Joost take the motor out at Mill Strip, the aircraft itself. Two choices, two endings.
+- `make story` flies 524 runs with a human-like pilot and writes `docs/narrative/`;
+  `make test` checks every story number and re-runs bench rows byte for byte.
+
+![Mid-hop, the glide needed against the glide made](docs/images/ferry-flight.jpg)
+![Mill Strip, a heavy scene on a still, dark panel](docs/images/ferry-mill.jpg)
+![Phone, upright, touch only](docs/images/mobile-ferry.jpg)
+
 ## Browser
 
 With a C compiler, Emscripten on PATH, Python 3.14 and Node.js installed:
@@ -30,7 +54,8 @@ There is no persistence or external API. The browser downloads only local files.
 
 The landscape and aircraft are original image-model artwork. The dashed ground line is
 schematic; the separate plot has measured axes with independent horizontal/vertical scales.
-This model has no wind, thermals, roll or pitch-rate dynamics and is not flight instruction.
+This model has no thermals, roll or pitch-rate dynamics (the ferry's wind and sinking air move the
+whole air mass) and is not flight instruction.
 See [art direction and prompts](docs/art-direction.md) and [validation](docs/validation.md).
 
 ## Actual screens
@@ -87,14 +112,16 @@ Phugoid: a trimmed glide hit with +10 % airspeed trades speed for height in a sl
 `tests/test_flight.c` checks: numeric best L/D vs the analytic value (1 %), lift peak at stall, steady glide stays steady, energy conservation without drag, phugoid period vs Lanchester's `π√2·V/g` (10 %), touchdown rating, renderer bounds.
 
 ```sh
-make test                      # C model, GIF codec, browser adapter
+make test                      # C model, GIF codec, browser adapter, the ferry (Debian 13, as CI)
+make story                     # rewrite docs/narrative/ from the story bench
 make bench                     # native trajectories and landing checks
 npm ci                         # local-only Playwright development dependency
 make smoke                     # real WASM, keyboard/touch, errors, screenshots
 ```
 
 The smoke compares native and WASM trajectories for manual flight, trimmed landing and
-phugoid before exercising the UI. CI runs only the C tests on pull requests; browser
+phugoid before exercising the UI, and flies the ferry through both endings with real clicks.
+CI runs only the C tests (`docker build .`) on pull requests; browser
 builds and captures stay local. Initial distribution, including art, is checked against
 10,000,000 B by `make web`. Human first-play evaluation, actual mobile hardware and
 real-GPU performance remain unverified. No public web deployment has been made.
