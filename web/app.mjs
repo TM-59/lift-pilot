@@ -98,6 +98,7 @@ function syncControls() {
   $('pitch').disabled = locked;
   $('throttle').disabled = locked || noMotor;
   document.querySelectorAll('[data-adjust]').forEach(button => button.disabled = locked);
+  document.querySelectorAll('[data-motor]').forEach(button => button.disabled = locked || noMotor);
 }
 function reset(mode = 0, run = false) {
   setMode(false);
@@ -198,6 +199,9 @@ $('pitch').addEventListener('input', event => controls(Number(event.target.value
 $('throttle').addEventListener('input', event => controls(ferry ? command : state.command, Number(event.target.value) / 100));
 document.querySelectorAll('[data-adjust]').forEach(button => {
   button.addEventListener('click', () => controls((ferry ? command : state.command) + Number(button.dataset.adjust), ferry ? throttle : state.throttle));
+});
+document.querySelectorAll('[data-motor]').forEach(button => {
+  button.addEventListener('click', () => controls(ferry ? command : state.command, Number(button.dataset.motor)));
 });
 document.addEventListener('keydown', event => {
   if (!engine || event.ctrlKey || event.metaKey || event.altKey || event.target.matches('input,textarea,select')) return;
@@ -347,6 +351,91 @@ function renderFerry() {
     : 'No motor now. A cleaner wing, and nothing to fix a mistake with.';
   $('experiment-note').textContent = 'The flight laboratory and its experiments are still here; choosing one leaves the ferry.';
 }
+// ------------------------------------------------------------------ the goal and the next step (bug #10)
+// Words only, from the C state already read. The same strings fill #goal-line / #next-step and are returned by
+// __tmGate.objective() / hint(). `target` names the control the next step asks for; it is outlined on screen.
+const STALL_DEG = 14.9;
+const km = metres => `${(Math.max(0, metres) / 1000).toFixed(1)} km`;
+function flightStep({x, h, sink, stall, cmd, thr, strip, length, motorLeft, low}) {
+  const over = x >= strip, past = x > strip + length, near = over || (strip - x < 400 && h < 30);
+  if (stall) return {next: `Stalling: nose down (− / S) until below ${STALL_DEG}°.`, tone: 'warn', target: 'down'};
+  if (past) return {next: "Past the strip end: she'll land long. Hold 4° and touch down gently.", tone: 'warn', target: null};
+  if (near && h < 12 && sink > 1.8)
+    return {next: `Sinking ${sink.toFixed(1)} m/s near the ground: nose up once (+ / W) to flare.`, tone: 'warn', target: 'up'};
+  if (near && thr > 0) return {next: 'On final: motor off (Motor 0% / F), glide onto the strip.', tone: 'ok', target: 'motor-off'};
+  if (near) return {next: 'On final: hold 4–6° and let her settle, sinking under 2 m/s.', tone: 'ok', target: null};
+  if (low && motorLeft && thr < 1)
+    return {next: "LOW: you can't glide to the strip. Motor 100% (R) to climb.", tone: 'warn', target: 'motor-full'};
+  if (low && motorLeft) return {next: 'Climbing on the motor: hold about 6° until LOW clears.', tone: 'ok', target: null};
+  if (low) return {next: 'LOW, no motor left: hold 4° (best glide), aim for the near end.', tone: 'warn', target: null};
+  if (thr > 0) return {next: 'Height in hand: motor off (Motor 0% / F) to save battery.', tone: 'ok', target: 'motor-off'};
+  if (cmd > 9) return {next: 'Nose high and slow: ease down toward 4° (− / S).', tone: 'ok', target: 'down'};
+  if (cmd < 1) return {next: 'Nose low and fast: bring it up toward 4° (+ / W).', tone: 'ok', target: 'up'};
+  return {next: 'Gliding well: hold about 4° and watch for LOW.', tone: 'ok', target: null};
+}
+function guide() {
+  if (!state) return {goal: 'Loading the flight model…', next: 'Wait a moment.', tone: 'ok', target: null};
+  if (!$('welcome').hidden)
+    return {goal: 'Pick a flight: the story or the flight laboratory.', next: 'Tap “Fly the last ferry” to begin.', tone: 'ok', target: 'welcome'};
+  if (ferry) {
+    const hop = Math.min(state.hop, 4), dest = HOPS[hop].split(' to ')[1];
+    if (inScene()) {
+      const s = SCENES[state.scene];
+      const goal = s.endings ? 'The ferry is over.' : `Hop ${hop + 1}/5 · ${HOPS[hop]}.`;
+      const next = s.options.length > 1 ? 'Read on, then pick one of the answers below.' : `Read on, then tap “${s.options[0]}”.`;
+      return {goal, next, tone: 'ok', target: 'answer'};
+    }
+    if (done()) return {goal: 'The ferry is over.', next: 'Tap “Fly it again” to start from Upper Field.', tone: 'ok', target: 'toggle'};
+    const over = state.x >= state.strip;
+    const goal = over ? `Hop ${hop + 1}/5 · land on ${dest}: over it, ${Math.max(0, state.strip + state.length - state.x).toFixed(0)} m of strip left.`
+      : `Hop ${hop + 1}/5 · land on ${dest}, ${km(state.strip - state.x)} ahead (${state.length.toFixed(0)} m strip).`;
+    if (paused) return {goal, next: 'Paused. Tap “Resume flight” (or P) to fly on.', tone: 'ok', target: 'toggle'};
+    return {goal, ...flightStep({x: state.x, h: state.h, sink: state.sink, stall: state.stall, cmd: command, thr: throttle,
+      strip: state.strip, length: state.length, motorLeft: Boolean(state.motor && state.charge > 0), low: Boolean(state.lowOn)})};
+  }
+  if (state.mode === 1 || state.mode === 2) {
+    const goal = state.mode === 1 ? 'Watch a trimmed landing: a fixed 4° nose, no motor.' : 'Watch 10% extra speed trade with height for 120 s.';
+    if (done()) return {goal, next: 'Done. Tap “Fly again” to fly the approach yourself.', tone: 'ok', target: 'toggle'};
+    if (paused) return {goal, next: 'Paused. Tap “Resume flight” (or P) to watch on.', tone: 'ok', target: 'toggle'};
+    return {goal, next: 'Controls are locked; watch the chart below the view.', tone: 'ok', target: null};
+  }
+  if (state.status) {
+    if (state.status === 2) return {goal: 'Land gently on the runway.', next: 'Hard landing (sink 2 m/s or more). Tap “Fly again”; flare (+) low down.', tone: 'warn', target: 'toggle'};
+    if (!state.onRunway) return {goal: 'Land gently on the runway.', next: 'Gentle, but off the runway. Tap “Fly again”; aim for the ochre band.', tone: 'ok', target: 'toggle'};
+    return {goal: 'Landed gently on the runway.', next: 'Done. Tap “Fly again”, or try the last ferry.', tone: 'ok', target: 'toggle'};
+  }
+  const runwayGoal = state.x >= state.runway ? 'Land on the runway: you are over it.' : `Land on the runway, ${(state.runway - state.x).toFixed(0)} m ahead, sink under 2 m/s.`;
+  if (paused && !state.time) return {goal: 'Land gently on the runway: sink under 2 m/s.', next: 'Tap “Start flying”, then set the nose with − / +; 4° glides best.', tone: 'ok', target: 'toggle'};
+  if (paused) return {goal: runwayGoal, next: 'Paused. Tap “Resume flight” (or P) to fly on.', tone: 'ok', target: 'toggle'};
+  return {goal: runwayGoal, ...flightStep({x: state.x, h: state.h, sink: state.sink, stall: state.stall, cmd: state.command, thr: state.throttle,
+    strip: state.runway, length: 300, motorLeft: false, low: false})};
+}
+// The element a target names: the phone's quick row when it is on screen, else the control panel.
+const visible = el => el && !el.disabled && el.getClientRects().length > 0;
+function targetElement(target) {
+  const pick = (...els) => els.find(visible) || null;
+  switch (target) {
+    case 'welcome': return pick($('welcome-start'));
+    case 'answer': return pick($('story-options').firstChild);
+    case 'toggle': return pick($('toggle'));
+    case 'down': return pick(...document.querySelectorAll('.quick [data-adjust="-1"], .adjust [data-adjust="-1"]'));
+    case 'up': return pick(...document.querySelectorAll('.quick [data-adjust="1"], .adjust [data-adjust="1"]'));
+    case 'motor-off': return pick(document.querySelector('.quick [data-motor="0"]'), $('throttle'));
+    case 'motor-full': return pick(document.querySelector('.quick [data-motor="1"]'), $('throttle'));
+    default: return null;
+  }
+}
+let guideNow = {goal: '', next: '', tone: '', target: null};
+function renderGuide() {
+  const g = guide();
+  if (g.goal !== guideNow.goal) $('goal-line').textContent = g.goal;
+  if (g.next !== guideNow.next) $('next-step').textContent = g.next;
+  $('guide').dataset.tone = g.tone;
+  const el = targetElement(g.target);
+  document.querySelectorAll('.next-target').forEach(old => { if (old !== el) old.classList.remove('next-target'); });
+  if (el) el.classList.add('next-target');
+  guideNow = g;
+}
 function render() {
   if (ferry) renderFerry();
   else {
@@ -372,12 +461,13 @@ function render() {
   $('stall').hidden = !state.stall || inScene();
   $('toggle').setAttribute('aria-pressed', String(!paused));
   $('toggle').disabled = inScene();
-  syncControls(); drawScene(); drawPlot();
+  syncControls(); renderGuide(); drawScene(); drawPlot();
   // Read-only observation; tests advance the real UI clock and exercise the C exports.
   window.liftView = {snapshot: {...state, paused, ferry, artReady: Boolean(sky.naturalWidth && glider.naturalWidth), samples: samples.length,
     sceneId: inScene() ? SCENES[state.scene].id : null, sceneText: $('story').hidden ? '' : $('story-text').textContent,
     bannerShown: !$('banner').hidden, bannerText: $('banner').textContent, heavyLog: heavyLog.map(h => ({...h})),
-    welcome: !$('welcome').hidden, inputCommand: command, inputThrottle: throttle}, engine};
+    welcome: !$('welcome').hidden, inputCommand: command, inputThrottle: throttle,
+    guide: {goal: guideNow.goal, next: guideNow.next, tone: guideNow.tone, target: guideNow.target}}, engine};
 }
 function frame(timestamp) {
   if (!last) last = timestamp;
@@ -405,10 +495,12 @@ function frame(timestamp) {
 for (const img of [sky, glider]) img.onload = () => { if (engine) render(); };
 new ResizeObserver(() => { if (engine) render(); }).observe(scene);
 new ResizeObserver(() => { if (engine) drawPlot(); }).observe(plot);
+// Sideways phones: the view takes the screen height less the goal lines above it.
+new ResizeObserver(() => document.documentElement.style.setProperty('--guide-h', `${$('guide').offsetHeight}px`)).observe($('guide'));
 $('pitch').disabled = $('throttle').disabled = true;
-document.querySelectorAll('[data-adjust]').forEach(button => button.disabled = true);
+document.querySelectorAll('[data-adjust],[data-motor]').forEach(button => button.disabled = true);
 
-// Common test hook of the playability gate (TM-59 project-context, rules/playability.json). Read-only.
+// Common test hook of the playability gate (touch-only phone checks). Read-only.
 // Logical units are the scene canvas's CSS pixels. DOM words and buttons are measured by the gate directly.
 function fromCanvas(el) {
   if (!el || el.hidden || !el.getClientRects().length) return null;
@@ -421,19 +513,15 @@ window.__tmGate = {
   scene: () => !state ? 'loading' : !$('welcome').hidden ? 'title' : inScene() ? `scene:${SCENES[state.scene].id}` : done() ? 'done' : paused ? 'paused' : 'play',
   // The first goal: the ferry's first scene answered (Joost's hangar closed, the Kestrel airborne on the first hop).
   goal: () => Boolean(ferry && state && (state.hop > 0 || (state.scene < 0 && state.charge > 5))),
-  objective: () => ferry ? $('hop-name').textContent : $('status').textContent,
+  // The goal and the next step, as shown above the flight view (#goal-line / #next-step).
+  objective: () => $('goal-line').textContent,
+  hint: () => $('next-step').textContent,
   texts: () => [],
   targets: () => [],
   // A longitudinal flight: there is no screen direction to steer.
   player: () => null,
-  // Where a player who reads the screen would tap next: the welcome card, the open scene's first answer, or Resume.
-  hint: () => {
-    if (!state) return null;
-    if (!$('welcome').hidden) return fromCanvas($('welcome-start'));
-    if (inScene()) return fromCanvas($('story-options').firstChild);
-    if (paused && !done()) return fromCanvas($('toggle'));
-    return null;
-  },
+  // Where a player who reads the screen would tap next: the control the next step names (outlined on screen).
+  nextTarget: () => fromCanvas(document.querySelector('.next-target')),
 };
 try {
   engine = await createFlight();
@@ -442,5 +530,6 @@ try {
   reset(); requestAnimationFrame(frame);
 } catch {
   $('status').textContent = 'Flight model unavailable — reload to retry';
+  $('goal-line').textContent = 'The flight model could not load.'; $('next-step').textContent = 'Reload the page to try again.';
   $('experiment-note').textContent = 'The flight model could not load. Serve the built files over HTTP with WebAssembly enabled.';
 }

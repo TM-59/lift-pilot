@@ -24,12 +24,16 @@ battery. Start it with **Fly the last ferry** on the welcome card or in the cont
 - Story scenes open at the end of each hop and change only game numbers: the battery, where the
   strip is and how long, the air (a uniform headwind or sinking air carries the whole air mass),
   and, if you let Joost take the motor out at Mill Strip, the aircraft itself. Two choices, two endings.
+- Above the view, `GOAL` says where to land and how far, and `NEXT` says what to do now and with which
+  control (LOW: Motor 100%; stalling: nose down; low and sinking: flare). The control is outlined; on an
+  upright phone a quick row (− Nose, + Nose, Motor 0%, Motor 100%) sits under the view.
 - `make story` flies 524 runs with a human-like pilot and writes `docs/narrative/`;
   `make test` checks every story number and re-runs bench rows byte for byte.
 
 ![Mid-hop, the glide needed against the glide made](docs/images/ferry-flight.jpg)
 ![Mill Strip, a heavy scene on a still, dark panel](docs/images/ferry-mill.jpg)
 ![Phone, upright, touch only](docs/images/mobile-ferry.jpg)
+![Phone, upright: the goal, the next step and the quick row during a stall](docs/images/mobile-guide.jpg)
 
 ## Browser
 
