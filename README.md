@@ -5,6 +5,9 @@ an illustrated browser cockpit and the original terminal view. Both use the same
 point-mass longitudinal equations, RK4 integration and parabolic drag polar with stall.
 (C言語の飛行力学シミュレータ。同じ物理モデルでブラウザーと端末から滑空機を操縦できます。)
 
+**Theory handbook:** [docs/theory](docs/theory/README.md) states every law, numerical rule and game rule the code relies on (19 statements), each with a figure, the function that implements it and the test or measurement that checks it. `make theory-figs` regenerates the figures from the flight model; `make theory-check` verifies the coverage table.
+(理論の手引き: コードが拠る法則・数値計算の規則・ゲームの規則を、図・実装箇所・検査とともに `docs/theory` にまとめています。)
+
 ![Browser flight laboratory, captured from the running WASM build](docs/images/observatory.jpg)
 
 ## The Last Ferry

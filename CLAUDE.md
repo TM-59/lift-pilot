@@ -12,6 +12,9 @@ C11 + libm の縦運動シミュレーター。物理の正典は `src/flight.c`
 - 乱数・保存・サーバー API は無い。既存の出力と物理モデルを保持する。
 - 検証は `make test` / `make bench` / `make story-check` / `make plots` / `make web` / `make smoke`。
 - Python は 3.14、`make -j` は最大4。
+- 理論の手引きは `docs/theory/`。`make theory-figs` が図と実測値の表を `tests/theory_figs.c` から再生成し、`make theory-check` が
+  対応表(文 → 頁 → 図 → 関数 → テスト)の欠け・リンク切れ・消えた関数名・未掲載の公開関数で落ちる。法則・規則を足したら同じ PR で頁と図と表を足す。
+  README の「19 statements」は表の行数と合わせる。
 - `make test` は bench の行をバイト一致で照合するので、`make story`・`make test` は Dockerfile と同じ Debian 13 の
   ツールチェーンで行う(この PC に C コンパイラは無い。`docker build .` か Debian 13 + build-essential のコンテナ)。
 - CI は PR の軽量テストのみ(`docker build .` の中の `make test` と `make plots`)。WASM ビルド・撮影・E2E はローカル専用。
