@@ -16,15 +16,15 @@
 
 #define CELLS_CHARGE 26.0      /* FE_CELLS: Joost's spare cells, s of full throttle */
 #define QUARRY_STRIP 2500.0    /* FE_ROUTE: the strip across the quarry [m] */
-#define QUARRY_LIFT (-0.50)    /* FE_ROUTE: the air over the quarry sinks [m/s] */
+#define QUARRY_LIFT (-0.40)    /* FE_ROUTE: the air over the quarry sinks [m/s] */
 #define RIDGE_STRIP 3500.0     /* FE_ROUTE: the strip round Hob Ridge [m] */
 #define RIDGE_CLIMB 15.0       /* FE_ROUTE: the climb-out along the slope ends this much higher [m] */
 #define ORCHARD_CHARGE 15.0    /* FE_ORCHARD: Ros's solar panels, s of full throttle */
-#define VALLEY_WIND (-3.0)     /* FE_WIND: the valley wind on the nose, hops 4 and 5 [m/s] */
-#define CLEAN_CD0 0.0140       /* FE_MOTOR: no motor pylon or folded propeller (from 0.015) */
-#define WINCH_H 145.0          /* FE_MOTOR: the mill's winch launch [m] */
-#define SEA_LIFT (-0.15)       /* FE_DOORS: the sea breeze sinks the air on the last hop [m/s] */
-#define SEA_WIND (-2.0)        /* FE_DOORS: the sea breeze adds this much on the nose [m/s] */
+#define VALLEY_WIND (-4.0)     /* FE_WIND: the valley wind on the nose, hops 4 and 5 [m/s] */
+#define CLEAN_CD0 0.0130       /* FE_MOTOR: no motor pylon or folded propeller, gaps taped (from 0.015) */
+#define WINCH_H 160.0          /* FE_MOTOR: the mill's winch launch [m] */
+#define SEA_LIFT (-0.25)       /* FE_DOORS: the sea breeze sinks the air on the last hop [m/s] */
+#define SEA_WIND (-3.0)        /* FE_DOORS: the sea breeze adds this much on the nose [m/s] */
 #define YARD_LEN 250.0         /* FE_DOORS: the breaker's yard strip [m] */
 
 /* Strip thresholds and the height at the top of the climb-out, hop by hop. */
@@ -95,7 +95,7 @@ static void launch(Ferry *f)
     f->hop_time = 0.0;
     /* The readout starts at the steady glide of the launch: ground speed over sink through the moving air. */
     double down = -f->state.v * sin(f->state.gamma) - f->lift;
-    f->making = glide_step(f->state.v * cos(f->state.gamma) + f->wind, down);
+    f->making = glide_step(f->state.v * cos(f->state.gamma) + f->wind, -down);
 }
 
 static void start_hop(Ferry *f)

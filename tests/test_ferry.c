@@ -124,6 +124,18 @@ int main(void)
         puts("[flight] still air, no story numbers: identical to flight_step for 1,500 frames");
     }
 
+    /* [gauge] the glide-made readout starts every hop at the steady glide of the launch: ground speed over sink (#15).
+     * It used to start at its cap, 60, so the LOW light could not come on in the first seconds of a hop. */
+    {
+        Ferry f;
+        ferry_init(&f, 0u);
+        assert(ferry_answer(&f, 0) == 0 && f.hop == 0);
+        double steady = f.state.v * cos(f.state.gamma) / (-f.state.v * sin(f.state.gamma));
+        assert(steady > 20.0 && steady < 35.0);
+        assert(fabs(ferry_value(&f, FV_MAKING) / steady - 1.0) < 0.01);
+        puts("[gauge] glide made at launch = ground speed / sink (within 1 %), not the cap");
+    }
+
     /* [order] the bench's play-order.json (re-checked against the code by story_bench --check): every seed meets the
      * scenes in the designed order (the promise before it is broken, the bottom before the end) and both endings are
      * reached; every heavy scene is recorded as shown quietly. */
@@ -160,7 +172,7 @@ int main(void)
         puts("[mech] hangar: battery 5 -> 26 s (Joost's cells)");
     }
 
-    /* [mech] weir: across the quarry the strip is 2,500 m away and the air sinks 0.5 m/s; round Hob Ridge it is 3,500 m
+    /* [mech] weir: across the quarry the strip is 2,500 m away and the air sinks 0.4 m/s; round Hob Ridge it is 3,500 m
      * away and the climb-out ends 15 m higher, in still air. With no route effect: 3,000 m, still air, 120 m. */
     {
         Ferry a, b, c;
@@ -169,7 +181,7 @@ int main(void)
         assert(ferry_options(FS_WEIR) == 2 && !ferry_heavy(FS_WEIR) && a.banner == FB_CLEAR);
         assert(ferry_answer(&a, 0) == 0 && ferry_answer(&b, 1) == 0 && ferry_answer(&c, 1) == 0);
         assert(a.route == 0 && b.route == 1);
-        assert(a.strip == 2500.0 && close_to(a.lift, -0.5) && a.start_h == 120.0);
+        assert(a.strip == 2500.0 && close_to(a.lift, -0.4) && a.start_h == 120.0);
         assert(b.strip == 3500.0 && b.lift == 0.0 && b.start_h == 135.0);
         assert(c.strip == 3000.0 && c.lift == 0.0 && c.start_h == 120.0);
         /* The sinking air is applied to the height after each unchanged step. */
@@ -177,8 +189,8 @@ int main(void)
         State s = a.state;
         ferry_tick(&a, 1, 4.0, 0.0);
         flight_step(&ac, &s, 4.0 * DEG, 0.0, 0.02);
-        assert(close_to(a.state.h, s.h - 0.5 * 0.02) && a.state.x == s.x);
-        puts("[mech] weir: quarry 2,500 m in air sinking 0.5 m/s; ridge 3,500 m from a climb-out 15 m higher");
+        assert(close_to(a.state.h, s.h - 0.4 * 0.02) && a.state.x == s.x);
+        puts("[mech] weir: quarry 2,500 m in air sinking 0.4 m/s; ridge 3,500 m from a climb-out 15 m higher");
     }
 
     /* [mech] orchard: Ros's panels add 15 s of charge; then the buyer's letter opens.
@@ -201,7 +213,7 @@ int main(void)
         puts("[quiet] buyer: shown with no strip-made banner, before or after");
     }
 
-    /* [mech] buyer: from Mill Strip on, the valley wind is 3 m/s on the nose: the ground position falls back 3 m/s
+    /* [mech] buyer: from Mill Strip on, the valley wind is 4 m/s on the nose: the ground position falls back 4 m/s
      * behind the airspeed. The hop to Mill Strip itself is still calm. */
     {
         Ferry a, b;
@@ -209,21 +221,21 @@ int main(void)
         reach(&a, FS_MILL, 1, 1); reach(&b, FS_MILL, 1, 1);
         assert(a.hop == 3 && b.hop == 3);
         assert(ferry_answer(&a, 1) == 0 && ferry_answer(&b, 1) == 0);
-        assert(close_to(a.wind, -3.0) && b.wind == 0.0);
+        assert(close_to(a.wind, -4.0) && b.wind == 0.0);
         Aircraft ac = glider_default();
         State s = a.state;
         ferry_tick(&a, 1, 4.0, 0.0);
         flight_step(&ac, &s, 4.0 * DEG, 0.0, 0.02);
-        assert(close_to(a.state.x, s.x - 3.0 * 0.02));
+        assert(close_to(a.state.x, s.x - 4.0 * 0.02));
         Ferry c;
         ferry_init(&c, FE_ALL);
         reach(&c, FS_BUYER, 1, 1);
         assert(ferry_answer(&c, 0) == 0 && c.hop == 2 && c.wind == 0.0);
-        puts("[mech] buyer: valley wind 3 m/s on the nose for the last two hops");
+        puts("[mech] buyer: valley wind 4 m/s on the nose for the last two hops");
     }
 
-    /* [mech] mill, both paths. Pulled: no motor (throttle does nothing), a cleaner airframe (CD0 0.014) and the mill's
-     * winch launch to 145 m. Whole: the motor and the battery stay, the launch is the usual 80 m climb-out.
+    /* [mech] mill, both paths. Pulled: no motor (throttle does nothing), a cleaner airframe (CD0 0.013) and the mill's
+     * winch launch to 160 m. Whole: the motor and the battery stay, the launch is the usual 80 m climb-out.
      * [quiet] mill: no "strip made" banner when it opens, nor after. */
     for (int pulled = 0; pulled < 2; pulled++) {
         Ferry a;
@@ -233,17 +245,17 @@ int main(void)
         int loud = a.loud;
         double charge = a.charge;
         assert(ferry_answer(&a, pulled) == 0 && a.pulled == pulled);
-        assert(a.motor == pulled && close_to(a.aircraft.cd0, pulled ? 0.015 : 0.014));
-        assert(close_to(a.start_h, pulled ? 80.0 : 145.0) && close_to(a.charge, pulled ? charge : 0.0));
+        assert(a.motor == pulled && close_to(a.aircraft.cd0, pulled ? 0.015 : 0.013));
+        assert(close_to(a.start_h, pulled ? 80.0 : 160.0) && close_to(a.charge, pulled ? charge : 0.0));
         double v = a.state.v;
         ferry_tick(&a, 1, 4.0, 1.0);
         assert(a.loud == loud && a.banner != FB_CLEAR);
         assert(pulled ? a.throttle == 1.0 && a.state.v > v - 0.05 : a.throttle == 0.0);
     }
-    puts("[mech] mill: pulled = no motor, CD0 0.014, winch to 145 m; whole = motor, 80 m climb-out");
+    puts("[mech] mill: pulled = no motor, CD0 0.013, winch to 160 m; whole = motor, 80 m climb-out");
     puts("[quiet] mill: shown with no strip-made banner");
 
-    /* [mech] doors: the last hop has the sea breeze (2 m/s more on the nose, air sinking 0.15 m/s) and the breaker's
+    /* [mech] doors: the last hop has the sea breeze (3 m/s more on the nose, air sinking 0.25 m/s) and the breaker's
      * yard strip is 250 m long, not 600 m. [quiet] doors: no banner when it opens, nor after. */
     {
         Ferry a, b;
@@ -252,11 +264,11 @@ int main(void)
         assert(ferry_heavy(FS_DOORS) && a.banner == FB_NONE && b.banner == FB_NONE);
         int loud = a.loud;
         assert(ferry_answer(&a, 0) == 0 && ferry_answer(&b, 0) == 0);
-        assert(a.hop == 4 && close_to(a.wind, -5.0) && close_to(a.lift, -0.15) && a.length == 250.0);
-        assert(close_to(b.wind, -3.0) && b.lift == 0.0 && b.length == 600.0);
+        assert(a.hop == 4 && close_to(a.wind, -7.0) && close_to(a.lift, -0.25) && a.length == 250.0);
+        assert(close_to(b.wind, -4.0) && b.lift == 0.0 && b.length == 600.0);
         ferry_tick(&a, 1, 4.0, 0.0);
         assert(a.loud == loud && a.banner != FB_CLEAR);
-        puts("[mech] doors: sea breeze 2 m/s more on the nose, air sinking 0.15 m/s, a 250 m yard");
+        puts("[mech] doors: sea breeze 3 m/s more on the nose, air sinking 0.25 m/s, a 250 m yard");
         puts("[quiet] doors: shown with no strip-made banner");
     }
 

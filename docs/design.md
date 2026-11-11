@@ -29,11 +29,11 @@ Scenes open at fixed progress points: the start of the run and the end of each h
 | Scene (`FS_*`) | Opens | Story numbers (one `FE_*` bit each) |
 |---|---|---|
 | `hangar` | at the start | `FE_CELLS`: battery 5 → 26 s of full throttle |
-| `weir` (choice) | Weir Strip made | `FE_ROUTE`: quarry = strip at 2,500 m, air sinking 0.5 m/s; ridge = strip at 3,500 m, climb-out 15 m higher |
+| `weir` (choice) | Weir Strip made | `FE_ROUTE`: quarry = strip at 2,500 m, air sinking 0.4 m/s; ridge = strip at 3,500 m, climb-out 15 m higher |
 | `orchard` | Orchard Strip made | `FE_ORCHARD`: +15 s of charge |
-| `buyer` (heavy) | after the orchard | `FE_WIND`: 3 m/s on the nose for hops 4 and 5 |
-| `mill` (choice, heavy) | Mill Strip made | `FE_MOTOR`, pulled: no motor, CD0 0.015 → 0.014, the mill's winch to 145 m |
-| `doors` (heavy) | Ferry Point made | `FE_DOORS`: the sea breeze (2 m/s more on the nose, air sinking 0.15 m/s), a 250 m yard |
+| `buyer` (heavy) | after the orchard | `FE_WIND`: 4 m/s on the nose for hops 4 and 5 |
+| `mill` (choice, heavy) | Mill Strip made | `FE_MOTOR`, pulled: no motor, CD0 0.015 → 0.013, the mill's winch to 160 m |
+| `doors` (heavy) | Ferry Point made | `FE_DOORS`: the sea breeze (3 m/s more on the nose, air sinking 0.25 m/s), a 250 m yard |
 | `coast` (ending) | the yard made | two endings by the mill choice |
 
 Wind and vertical air motion move the whole air mass: after each unchanged RK4 step the
