@@ -1,3 +1,29 @@
+# Glide-made readout fix and retune (2026-11-11, issue #15)
+
+`launch()` passed the sink rate to `glide_step` with the wrong sign, so the glide-made needle started every hop at its cap (60) instead of the steady launch glide (26.8), and the LOW light could not come on for the first seconds. The bench pilot reads this needle; with the cap it dived off height at the start of each hop. With the needle right the pilot flies better, the two late punishments stopped costing time (buyer −0.1 %, doors −1.9 % against the 5 % the story test requires), and the Mill choice lost its trade-off. Six story numbers were therefore retuned by a search over 45 settings, each scored by the same conditions as `tests/test_ferry.c` (five passed; the one closest to the old numbers was taken).
+
+| Number | Before | After |
+|---|---|---|
+| valley wind, hops 4 and 5 (`VALLEY_WIND`) | 3 m/s on the nose | 4 m/s |
+| sea breeze on the last hop (`SEA_WIND`, `SEA_LIFT`) | 2 m/s more, air sinking 0.15 m/s | 3 m/s more, air sinking 0.25 m/s |
+| quarry air (`QUARRY_LIFT`) | sinking 0.5 m/s | sinking 0.4 m/s |
+| motor pulled (`CLEAN_CD0`, `WINCH_H`) | CD0 0.014, winch to 145 m | CD0 0.013, winch to 160 m |
+
+| Check | main | this change |
+|---|---|---|
+| readout at launch (`making-start`) | 60 (the cap) | 26.76 = ground speed / sink; new `[gauge]` assertion within 1 % |
+| `[mech]` buyer / doors, seconds, seeds one way (relative) | 32/40 (−8.4 %) / 34/40 (−8.7 %) | 34/40 (−12.4 %) / 33/40 (−8.1 %) |
+| all story numbers off, seconds / low | 28/40 / 36/40 | 30/40 / 31/40 |
+| `[choice]` weir seconds, low / mill seconds, low | 32, 35 / 28, 40 of 40 | 32, 39 / 28, 40 of 40 |
+| tension, 192 runs: no failure / not completed | 34 (18 %) / 0 | 17 (9 %) / 0 |
+| outlanding in a hop, share of runs, hops 1–5 | 0.21 0.11 0.14 0.46 0.47 | 0.26 0.14 0.14 0.54 0.48 |
+| ablation, all effects on: mean seconds / time LOW / outlandings | 864 / 215 / 2.88 | 928 / 297 / 3.80 |
+| narrative score (worst seed, median) | 93, 93 | 93, 93 |
+
+`make test` (with the regenerated `docs/narrative`), `make story-check` (all rows byte for byte), `make theory-figs` + `make theory-check` (19 statements) and `make plots` pass; `src/flight.c` and the CSV/SVG/GIF outputs are unchanged. `make web` 935,727 B (7 files); `make smoke`: 127 checks in 981 s, page errors 0, external requests 0. The ferry was flown twice through the page with real clicks (quarry + motor out, ridge + whole): 7 scenes in order and both endings. The smoke's own crude pilot (two fixed pitch settings, motor on LOW) outlanded 9 times and rode the trailer on 3 hops on each path (on main: 9 outlandings / 3 trailers, 9 outlandings / 3 trailers).
+
+The run is a little harder than before for the bench pilot (fewer flawless runs, about one more outlanding per run). Human first-play feel and real phones are not verified.
+
 # M4 validation
 
 Measured on 2026-10-26. Artwork changes are accompanied by actual C/WASM and UI checks.

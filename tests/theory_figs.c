@@ -314,8 +314,8 @@ static void fig_gauges(void)
     double need0 = ferry_need(&g), h = ferry_value(&g, FV_H), v = ferry_value(&g, FV_V);
     value("need-start", "glide needed at the start of hop 1 (theory (2500 + 80) / (82 + (V^2 - 25^2) / 2g))", need0,
           2580.0 / (h + (v * v - 625.0) / (2.0 * GRAVITY)));
-    value("making-start", "glide-made readout at the start of a hop, as coded (it starts at its cap, 60; the steady 4 deg glide is 26.8)",
-          ferry_value(&g, FV_MAKING), 60.0);
+    value("making-start", "glide-made readout at the start of a hop (theory: the steady 4 deg launch glide, ground speed over sink)",
+          ferry_value(&g, FV_MAKING), g.state.v * cos(g.state.gamma) / (-g.state.v * sin(g.state.gamma)));
     value("low-start", "LOW gauge at the start: needed above made (1 = on)", ferry_low_on(&g), need0 > ferry_value(&g, FV_MAKING) ? 1.0 : 0.0);
     n = 0;
     while (ferry_value(&g, FV_SCENE) == FS_NONE && ferry_value(&g, FV_OUTLANDINGS) < 1.0 && n < 400) {

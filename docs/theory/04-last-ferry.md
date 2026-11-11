@@ -85,13 +85,13 @@ flowchart TD
 
 *Figure: the calculation behind the two needles, once per frame.*
 
-**Assumptions and where they break.** The readout lags by design, like a mechanical needle. **Known defect:** at the start of every hop the readout is initialised at the cap, 60, instead of the steady glide (26.8 for the 4° launch glide), because the launch code passes the sink rate with the wrong sign (issue #15). It then relaxes to the true value over about 15 s (visible at the left of the figure of S16), and during that time LOW cannot come on.
+**Assumptions and where they break.** The readout lags by design, like a mechanical needle (5 s). At the start of every hop it is set to the steady glide of the launch, ground speed over sink through the moving air (26.8 for the 4° launch glide in still air), so LOW can come on from the first second. Until issue #15 was fixed it started at the cap, 60, because the launch code passed the sink rate with the wrong sign; the bench pilot, which reads this needle, then dived off height it did not have to spare at the start of each hop.
 
 **Derivation.** Ground distance per unit of energy height lost is the glide ratio that matters for reaching a strip; the cap keeps a climb from producing a negative or infinite reading.
 
 **Code.** `ferry_low_on`, `ferry_tick` and the static `glide_step` in `src/ferry.c`.
 
-**Tests.** `tests/test_ferry.c`: "[mech] all story numbers off" and the per-beat checks use the time with LOW on as one of their two outcomes; measured values `making-start` (60, the defect), `low-start`.
+**Tests.** `tests/test_ferry.c`: "[mech] all story numbers off" and the per-beat checks use the time with LOW on as one of their two outcomes; "[gauge]" asserts the readout at launch is within 1 % of ground speed over sink; measured values `making-start`, `low-start`.
 
 ## S18 — Making the strip, outlandings and the trailer
 
@@ -127,14 +127,14 @@ stateDiagram-v2
     [*] --> Hangar
     Hangar --> Hop1: battery 5 → 26 s
     Hop1 --> Weir: strip at 2500 m
-    Weir --> Hop2: choice — quarry (strip 2500 m, air sinking 0.5 m/s) or ridge (strip 3500 m, start 15 m higher)
+    Weir --> Hop2: choice — quarry (strip 2500 m, air sinking 0.4 m/s) or ridge (strip 3500 m, start 15 m higher)
     Hop2 --> Orchard
     Orchard --> Buyer: +15 s of charge
     Buyer --> Hop3: (heavy scene, no banner)
     Hop3 --> Mill: strip at 2600 m
-    Mill --> Hop4: choice — motor pulled (no thrust, CD0 0.014, winch to 145 m) or flown on whole
-    Hop4 --> Doors: 3 m/s on the nose
-    Doors --> Hop5: sea breeze — 2 m/s more on the nose, air sinking 0.15 m/s, a 250 m strip
+    Mill --> Hop4: choice — motor pulled (no thrust, CD0 0.013, winch to 160 m) or flown on whole
+    Hop4 --> Doors: 4 m/s on the nose
+    Doors --> Hop5: sea breeze — 3 m/s more on the nose, air sinking 0.25 m/s, a 250 m strip
     Hop5 --> Coast
     Coast --> [*]
 ```
@@ -142,11 +142,11 @@ stateDiagram-v2
 | Scene | Effect bit | What changes |
 |---|---|---|
 | Hangar | `FE_CELLS` | battery 5 → 26 s of full throttle |
-| Weir | `FE_ROUTE` | quarry: strip at 2500 m, air sinking 0.5 m/s. Ridge: strip at 3500 m, start height +15 m |
+| Weir | `FE_ROUTE` | quarry: strip at 2500 m, air sinking 0.4 m/s. Ridge: strip at 3500 m, start height +15 m |
 | Orchard | `FE_ORCHARD` | +15 s of charge |
-| Buyer | `FE_WIND` | hops 4 and 5: wind 3 m/s on the nose |
-| Mill | `FE_MOTOR` | motor pulled: no thrust, charge 0, $C_{D0}$ 0.015 → 0.014, hops 4 and 5 start from a 145 m winch launch |
-| Doors | `FE_DOORS` | hop 5: 2 m/s more on the nose, air sinking 0.15 m/s, strip 250 m long |
+| Buyer | `FE_WIND` | hops 4 and 5: wind 4 m/s on the nose |
+| Mill | `FE_MOTOR` | motor pulled: no thrust, charge 0, $C_{D0}$ 0.015 → 0.013, hops 4 and 5 start from a 160 m winch launch |
+| Doors | `FE_DOORS` | hop 5: 3 m/s more on the nose, air sinking 0.25 m/s, strip 250 m long |
 
 Start heights of the five hops: 82, 120, 98, 80, 88 m; strip thresholds: 2500, 3000, 2600, 3000, 2800 m (hop 2 is replaced by the Weir choice).
 

@@ -68,7 +68,7 @@ flowchart TD
 | S18 | Strip, outlanding, trailer | [4](04-last-ferry.md) | mermaid | `src/ferry.c#outland`, `src/ferry.c#clear_hop` | `tests/test_ferry.c#[mech] outlanding` |
 | S19 | Scenes and the numbers they change | [4](04-last-ferry.md) | mermaid | `src/ferry.c#ferry_init`, `src/ferry.c#ferry_answer`, `src/ferry.c#ferry_options`, `src/ferry.c#ferry_heavy`, `src/ferry.c#ferry_ending`, `src/ferry.c#ferry_value` | `tests/test_ferry.c#[order]` |
 
-Tests named `tests/theory_figs.c#…` are measurements recorded in [figures/values.md](figures/values.md) by `make theory-figs`, not assertions of `make test`. S09, S11 and S16 are covered only that way; turning them into assertions is a follow-up. Writing S17 down exposed a defect in the start value of the glide-made readout (issue #15).
+Tests named `tests/theory_figs.c#…` are measurements recorded in [figures/values.md](figures/values.md) by `make theory-figs`, not assertions of `make test`. S09, S11 and S16 are covered only that way; turning them into assertions is a follow-up. Writing S17 down exposed a defect in the start value of the glide-made readout (issue #15), since fixed; the story numbers were retuned with it (see `docs/validation.md`).
 
 ## Public functions that state no law
 

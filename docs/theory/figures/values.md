@@ -31,5 +31,5 @@ SI units: m, s, kg, N, rad unless a row says otherwise. Default aircraft: 300 kg
 | `battery-10s` | battery after 10 s of full throttle (theory 26 - 10) | 16 | 16 | 0.00e+00 |
 | `battery-empty` | throttle actually applied once the battery is flat (theory 0) | 0 | 0 | 0.00e+00 |
 | `need-start` | glide needed at the start of hop 1 (theory (2500 + 80) / (82 + (V^2 - 25^2) / 2g)) | 28.0309 | 28.0309 | 0.00e+00 |
-| `making-start` | glide-made readout at the start of a hop, as coded (it starts at its cap, 60; the steady 4 deg glide is 26.8) | 60 | 60 | 0.00e+00 |
-| `low-start` | LOW gauge at the start: needed above made (1 = on) | 0 | 0 | 0.00e+00 |
+| `making-start` | glide-made readout at the start of a hop (theory: the steady 4 deg launch glide, ground speed over sink) | 26.7626 | 26.7626 | 0.00e+00 |
+| `low-start` | LOW gauge at the start: needed above made (1 = on) | 1 | 1 | 0.00e+00 |
