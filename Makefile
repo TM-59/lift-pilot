@@ -6,7 +6,7 @@ EMCC    ?= emcc
 PYTHON  ?= python3
 PORT    ?= 4215
 
-.PHONY: all test bench story story-check web play smoke plots clean
+.PHONY: all test bench story story-check web play smoke plots clean theory-figs theory-check
 all: lift-pilot
 
 lift-pilot: $(SRC) src/main.c
@@ -82,6 +82,18 @@ plots: lift-pilot
 	./lift-pilot --headless docs
 	./lift-pilot --gif docs/demo.gif
 	head -c6 docs/demo.gif | grep -q GIF89a
+
+# Regenerates the plotted figures and the measured-values table of docs/theory (one command).
+theory_figs: $(FERRY) src/svg.c tests/theory_figs.c src/flight.h src/ferry.h src/svg.h
+	$(CC) $(CFLAGS) -o $@ $(FERRY) src/svg.c tests/theory_figs.c $(LDLIBS)
+
+theory-figs: theory_figs
+	mkdir -p docs/theory/figures
+	./theory_figs docs/theory/figures
+
+# Fails when a statement of docs/theory has no figure, a link is broken, or a referenced function or test is gone.
+theory-check:
+	$(PYTHON) scripts/theory-check.py
 
 clean:
 	rm -f lift-pilot test_flight test_gif test_observer test_ferry story_bench
