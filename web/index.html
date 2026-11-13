@@ -82,10 +82,40 @@
     <div class="chart-panel"><div class="chart-heading"><h2 id="chart-title">The path you fly</h2><span id="chart-legend"><i class="line-key"></i> Altitude h [m]</span></div><canvas id="plot" width="1080" height="250" role="img" aria-label="Measured altitude in metres versus distance in metres"></canvas><p id="plot-note">Independent axis scales · runway = ochre band · past flight = solid line</p></div>
     <div class="force-panel"><p class="eyebrow">FORCES / SI UNITS</p><div class="force-row"><span>↑ Lift</span><strong id="lift">—</strong></div><div class="force-row"><span>← Drag</span><strong id="drag">—</strong></div><div class="force-row"><span>Angle of attack α</span><strong id="alpha">—</strong></div><div class="force-row"><span>Flight path γ</span><strong id="gamma">—</strong></div><p>Positive sink means descending.<br>Negative sink means climbing.</p></div>
   </section>
-  <section id="field-notes" class="field-notes"><p class="eyebrow">FIELD NOTES</p><div><h2>Height is energy in reserve.</h2><p>Raise the nose and speed can become height. Go beyond the stall angle and lift falls while drag rises. The speed–height experiment adds 10% airspeed to a trimmed glide; the measured trace shows the resulting phugoid.</p></div><div><h3>A deliberately small model</h3><p>Point-mass motion, RK4 at 0.02 s, constant air density and a parabolic drag polar. No thermals, roll or pitch-rate dynamics. In the last ferry, wind and sinking air move the whole air mass at a constant speed; the glider's equations are the same. Flight simulation for exploration; not flight instruction.</p><a href="https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/lift-to-drag-l-d-ratio/" target="_blank" rel="noreferrer">Read about lift / drag at NASA ↗</a></div></section>
+  <section id="pitch-lab" class="pitch-lab" aria-label="Pitch laboratory">
+    <div class="pl-head"><div><p class="eyebrow">02 / PITCH LABORATORY</p><h2>Give it a centre of gravity.<br><em>Watch it settle.</em></h2></div>
+      <p>A second, rigid-body model: the glider now has a pitch attitude and a pitch rate, and the angle of attack is whatever the pitching moment makes it. Move the centre of gravity, step the elevator or kick the nose, and compare the motion with its eigenvalues.</p></div>
+    <div class="pl-grid">
+      <div class="pl-controls">
+        <label for="pl-margin">Static margin (centre of gravity ahead of the neutral point) <output id="pl-margin-value" for="pl-margin">0.15</output></label>
+        <input id="pl-margin" type="range" min="-0.10" max="0.30" step="0.01" value="0.15" disabled>
+        <div class="range-ends"><span>−0.10 behind</span><span>0 neutral</span><span>0.30 ahead</span></div>
+        <label for="pl-elevator">Elevator step from trim (+ = trailing edge down, nose down) <output id="pl-elevator-value" for="pl-elevator">−1.0°</output></label>
+        <input id="pl-elevator" type="range" min="-3" max="3" step="0.5" value="-1" disabled>
+        <div class="range-ends"><span>−3° nose up</span><span>+3° nose down</span></div>
+        <div class="pl-buttons"><button id="pl-step" class="primary" disabled>Step the elevator</button><button id="pl-kick" disabled>Kick the nose (+6°/s)</button><button id="pl-reset" disabled>Reset to trim</button></div>
+        <p id="pl-status" role="status">Loading the flight model…</p>
+        <dl class="pl-readouts">
+          <div><dt>Short period, eigenvalue</dt><dd id="pl-sp">—</dd></div>
+          <div><dt>Short period, two-state approximation</dt><dd id="pl-approx">—</dd></div>
+          <div><dt>Phugoid period, eigenvalue</dt><dd id="pl-ph">—</dd></div>
+          <div><dt>Phugoid period, Lanchester with pitch damping</dt><dd id="pl-ph-theory">—</dd></div>
+          <div><dt>Steady α the moment balance predicts</dt><dd id="pl-steady">—</dd></div>
+        </dl>
+        <p id="pl-verdict" class="pl-verdict">—</p>
+      </div>
+      <div class="pl-views">
+        <div class="pl-view"><div class="chart-heading"><h3>Attitude</h3><span id="pl-clock">0.0 s</span></div><canvas id="pl-attitude" role="img" aria-label="The glider drawn at its pitch attitude, with the flight path and the angle of attack between them"></canvas></div>
+        <div class="pl-view"><div class="chart-heading"><h3>Angle of attack and pitch rate</h3></div><canvas id="pl-trace" role="img" aria-label="Angle of attack in degrees and pitch rate in degrees per second against time"></canvas></div>
+        <div class="pl-view"><div class="chart-heading"><h3>Eigenvalues</h3><span class="pl-legend"><i class="k sp"></i> short period <i class="k ph"></i> phugoid <i class="k ap"></i> approximation <i class="k re"></i> stable, not oscillating <i class="k un"></i> unstable</span></div><canvas id="pl-roots" role="img" aria-label="The four eigenvalues in the complex plane"></canvas></div>
+      </div>
+    </div>
+  </section>
+  <section id="field-notes" class="field-notes"><p class="eyebrow">FIELD NOTES</p><div><h2>Height is energy in reserve.</h2><p>Raise the nose and speed can become height. Go beyond the stall angle and lift falls while drag rises. The speed–height experiment adds 10% airspeed to a trimmed glide; the measured trace shows the resulting phugoid.</p></div><div><h3>A deliberately small model</h3><p>Point-mass motion, RK4 at 0.02 s, constant air density and a parabolic drag polar. No thermals or roll; pitch-rate dynamics only in the pitch laboratory, which is a separate rigid-body model. In the last ferry, wind and sinking air move the whole air mass at a constant speed; the glider's equations are the same. Flight simulation for exploration; not flight instruction.</p><a href="https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/lift-to-drag-l-d-ratio/" target="_blank" rel="noreferrer">Read about lift / drag at NASA ↗</a></div></section>
 </main>
 <footer><span>LIFT PILOT <span class="muted">/ C11 flight dynamics</span></span><span>Take your time. Keep your airspeed.</span></footer>
 <noscript>This interactive flight laboratory requires JavaScript and WebAssembly. The terminal simulator remains available from the repository.</noscript>
 <script type="module" src="app.mjs"></script>
+<script type="module" src="pitch-lab.mjs"></script>
 </body>
 </html>

@@ -47,7 +47,15 @@ async function compareWasm() {
     }
   }
   check(row===rows.length,'all native trajectory samples checked');
-  return {rows:row,fields:rows[0].length-2,maxError,tolerance:1e-8};
+  // Pitch laboratory: the WebAssembly eigenvalues against the native values written by make theory-figs.
+  const values=Object.fromEntries([...fs.readFileSync('docs/theory/figures/values.md','utf8').matchAll(/^\| `([^`]+)` \| [^|]+ \| ([^ |]+) \|/gm)].map(m=>[m[1],Number(m[2])]));
+  engine._pl_reset(.15);
+  const pitch={spRe:engine._pl_value(17),spIm:engine._pl_value(21),phRe:engine._pl_value(19),phIm:engine._pl_value(23),trimAfterStep:0};
+  for(const [key,id] of [['spRe','sp-eig-re'],['spIm','sp-eig-im'],['phRe','ph-eig-re'],['phIm','ph-eig-im']])
+    check(Math.abs(pitch[key]/values[id]-1)<1e-5,`WASM ${key} ${pitch[key]} vs native ${id} ${values[id]}`);
+  engine._pl_elevator(-1);pitch.trimAfterStep=engine._pl_value(7);
+  check(Math.abs(pitch.trimAfterStep-values['step-alpha'])<1e-4,`WASM steady alpha ${pitch.trimAfterStep} vs native ${values['step-alpha']}`);
+  return {rows:row,fields:rows[0].length-2,maxError,tolerance:1e-8,pitch};
 }
 
 async function run() {
@@ -128,16 +136,19 @@ async function run() {
   await broken.route('**/physics.wasm',route=>route.fulfill({status:200,body:''}));
   await broken.goto(origin+'/');await broken.getByText('Flight model unavailable — reload to retry').waitFor();
   check(await broken.locator('#toggle').isDisabled()&&await broken.locator('#pitch').isDisabled(),'WASM failure disables controls');
+  await broken.getByText('Pitch model unavailable — reload the page to retry').waitFor();
+  check(await broken.locator('#pl-step').isDisabled()&&await broken.locator('#pl-margin').isDisabled(),'WASM failure disables the pitch laboratory');
   await broken.close();
   const ferryRuns=[];
   for(const path of [{weir:0,mill:0,shots:true},{weir:1,mill:1,shots:false}]) ferryRuns.push(await flyFerry(context,origin,track,path));
   const phone=await ferryPhone(browser,origin,track);
   const guide=await guideCheck(browser,origin,track);
+  const pitchLab=await pitchLabCheck(browser,origin,track);
   check(errors.length===0,`console/page errors ${errors.join(';')}`);check(external.length===0,'no external requests');
   const result={checks,seconds:(performance.now()-started)/1000,equivalence,errors:errors.length,externalRequests:external.length,
     landing:{time:landing.time,x:landing.x,sink:landing.sink,status:landing.status,onRunway:landing.onRunway},
     manual:{time:manual.time,command:manual.command,throttle:manual.throttle},phugoid:{time:phugoid.time,samples:phugoid.samples},
-    ferry:ferryRuns,phone,guide,
+    ferry:ferryRuns,phone,guide,pitchLab,
     screenshots:fs.readdirSync('docs/images').filter(file=>file.endsWith('.jpg')).sort()};
   fs.writeFileSync('docs/validation.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result,null,2));
 }
@@ -268,3 +279,45 @@ async function guideCheck(browser,origin,track) {
   return out;
 }
 run().catch(error=>{console.error(error);process.exitCode=1}).finally(async()=>{if(browser)await browser.close();server.close()});
+
+// The pitch laboratory (src/pitch_lab.c): real sliders and buttons, the C numbers on screen, readable on phones and PCs.
+async function pitchLabCheck(browser,origin,track) {
+  const out={};
+  const lab=page=>page.evaluate(()=>window.pitchLab.snapshot);
+  for(const [name,viewport] of [['desktop',{width:1440,height:1000}],['laptop',{width:1024,height:768}],['portrait',{width:390,height:844}],['landscape',{width:844,height:390}]]) {
+    const phone=name==='portrait'||name==='landscape';
+    const ctx=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:phone,hasTouch:phone});
+    const page=await ctx.newPage();track(page);await ready(page,origin+'/');
+    await page.waitForFunction(()=>window.pitchLab?.snapshot);
+    if(!(await page.locator('#welcome').isHidden()))await page.getByRole('button',{name:'Open the flight laboratory instead'}).click();
+    await page.locator('#pitch-lab').scrollIntoViewIfNeeded();
+    const sizes=await page.evaluate(()=>{
+      const root=document.getElementById('pitch-lab');
+      const texts=[...root.querySelectorAll('*')].filter(el=>[...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())&&el.getClientRects().length);
+      const targets=[...root.querySelectorAll('button,input')].map(el=>el.getBoundingClientRect()).map(r=>Math.min(r.width,r.height));
+      const canvases=[...root.querySelectorAll('canvas')].map(c=>c.getBoundingClientRect()).map(r=>({w:r.width,h:r.height}));
+      return {font:Math.min(...texts.map(el=>parseFloat(getComputedStyle(el).fontSize))),target:Math.min(...targets),
+        overflow:document.documentElement.scrollWidth>innerWidth,canvas:Math.min(...canvases.map(c=>c.w))};
+    });
+    check(sizes.font>=14&&sizes.target>=44&&!sizes.overflow&&sizes.canvas>=200,`${name}: pitch lab text ${sizes.font}px, targets ${sizes.target}px, overflow ${sizes.overflow}, canvas ${sizes.canvas}px`);
+    let snap=await lab(page);
+    check(snap.oscillatory===1&&Math.abs(snap.spWn-4.19408)<1e-4&&!snap.unstable,`${name}: default margin shows two oscillations (${snap.spWn})`);
+    check((await page.locator('#pl-sp').textContent()).startsWith(snap.spWn.toFixed(3)),`${name}: short-period readout is the C value`);
+    const press=id=>phone?page.locator(id).tap():page.locator(id).click();
+    await press('#pl-step');await page.clock.runFor(12600);
+    snap=await lab(page);
+    check(!snap.running&&Math.abs(snap.time-12)<1e-6&&Math.abs(snap.alpha-snap.trimAlpha)<.3&&snap.samples>500,`${name}: elevator step settles near the moment balance (${snap.alpha} vs ${snap.trimAlpha})`);
+    if(name==='desktop'||name==='portrait')await page.locator('#pitch-lab').screenshot({path:`docs/images/pitch-lab-${name}.jpg`,type:'jpeg',quality:88});
+    await page.locator('#pl-margin').fill('-0.05');
+    snap=await lab(page);
+    check(snap.unstable&&snap.lambda>.3&&/Diverges/.test(snap.verdict),`${name}: behind the neutral point the verdict is divergence (${snap.lambda})`);
+    await press('#pl-kick');await page.clock.runFor(12600);
+    snap=await lab(page);
+    check(snap.departed===1&&!snap.running,`${name}: the unstable glider departs (${snap.status})`);
+    if(name==='desktop')await page.locator('#pitch-lab').screenshot({path:'docs/images/pitch-lab-diverge.jpg',type:'jpeg',quality:88});
+    await press('#pl-reset');
+    out[name]={...sizes,departAt:+snap.time.toFixed(2)};
+    await ctx.close();
+  }
+  return out;
+}

@@ -3,7 +3,9 @@
 C11 + libm の縦運動シミュレーター。物理の正典は `src/flight.c`。
 端末版・CSV/SVG/GIF と、同じ C 計算を WASM で使うブラウザー版を持つ。
 
-- 点質量モデル・静止大気・一定密度。迎角の一次遅れはあるがピッチ角速度は未実装。
+- 点質量モデル・静止大気・一定密度。ゲーム・実験室・物語は迎角の一次遅れのモデル(`src/flight.c`)。
+  ピッチ角速度と縦の静安定・昇降舵を持つ剛体モデルは別の `src/pitch.c`(M2 #2)で、ブラウザーの pitch laboratory(`src/pitch_lab.c`・`web/pitch-lab.mjs`)と `./lift-pilot --pitch` だけが使う。
+  `flight_step` を変えずに置いているのは、既存の CSV/SVG/GIF・物語の JSON をバイト一致で保つため。
 - The Last Ferry(物語の飛行)は `src/ferry.c`。場面は区間(hop)の始まり・終わりで開き、電池・滑走路の位置と長さ・
   空気の動き(一様な風と上下の流れを RK4 の後に位置へ足す)・離陸高度・機体のモーターだけを変える。`src/flight.c` は変えない。
   台詞は `web/app.mjs`。ビート表は `docs/narrative/beats.json`、bench の出力(play-order・ablation・tension)は `make story` が書く(手で書かない)。
@@ -14,7 +16,7 @@ C11 + libm の縦運動シミュレーター。物理の正典は `src/flight.c`
 - Python は 3.14、`make -j` は最大4。
 - 理論の手引きは `docs/theory/`。`make theory-figs` が図と実測値の表を `tests/theory_figs.c` から再生成し、`make theory-check` が
   対応表(文 → 頁 → 図 → 関数 → テスト)の欠け・リンク切れ・消えた関数名・未掲載の公開関数で落ちる。法則・規則を足したら同じ PR で頁と図と表を足す。
-  README の「19 statements」は表の行数と合わせる。
+  README の「29 statements」は表の行数と合わせる。
 - `make test` は bench の行をバイト一致で照合するので、`make story`・`make test` は Dockerfile と同じ Debian 13 の
   ツールチェーンで行う(この PC に C コンパイラは無い。`docker build .` か Debian 13 + build-essential のコンテナ)。
 - CI は PR の軽量テストのみ(`docker build .` の中の `make test` と `make plots`)。WASM ビルド・撮影・E2E はローカル専用。

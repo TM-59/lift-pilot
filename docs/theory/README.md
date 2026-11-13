@@ -12,6 +12,7 @@ Why the program is correct, from the repository alone: every law, numerical rule
 2. [Equations of motion](02-motion.md) — point-mass motion, the steady glide and the speed polar, energy, the phugoid, the angle-of-attack lag
 3. [The numerical scheme, the ground and the screen](03-numerics-and-ground.md) — the Runge–Kutta step, its accuracy, the touchdown rule, the path to the cockpit
 4. [The Last Ferry: the rules of the game layer](04-last-ferry.md) — moving air, the battery, the two glide gauges, outlandings, scenes
+5. [Pitch dynamics: the rigid body](05-pitch.md) — pitching moment and static margin, the rigid-body equations, the short period and the phugoid from the eigenvalues, the elevator step, divergence behind the neutral point, the RK4 step limit, the pitch laboratory
 
 ## How the pieces depend on each other
 
@@ -42,6 +43,20 @@ flowchart TD
     S12 --> S18["S18 strip, outlanding, trailer"]
     S18 --> S19["S19 scenes"]
     S15 --> S19
+    S01 --> S20["S20 pitching moment, static margin"]
+    S05 --> S21["S21 rigid-body equations"]
+    S20 --> S21
+    S21 --> S22["S22 linearisation, two modes"]
+    S22 --> S23["S23 short-period approximation"]
+    S22 --> S24["S24 rigid-body phugoid"]
+    S08 --> S24
+    S22 --> S25["S25 response follows the eigenvalue"]
+    S20 --> S26["S26 elevator step, new trim"]
+    S22 --> S27["S27 divergence behind the neutral point"]
+    S11 --> S28["S28 RK4 step limit"]
+    S22 --> S28
+    S21 --> S29["S29 pitch laboratory"]
+    S13 --> S29
 ```
 
 ## Coverage: statement → page → figure → code → test
@@ -67,6 +82,16 @@ flowchart TD
 | S17 | Glide made and the LOW gauge | [4](04-last-ferry.md) | mermaid | `src/ferry.c#ferry_low_on`, `src/ferry.c#glide_step` | `tests/test_ferry.c#[mech] all story numbers off` |
 | S18 | Strip, outlanding, trailer | [4](04-last-ferry.md) | mermaid | `src/ferry.c#outland`, `src/ferry.c#clear_hop` | `tests/test_ferry.c#[mech] outlanding` |
 | S19 | Scenes and the numbers they change | [4](04-last-ferry.md) | mermaid | `src/ferry.c#ferry_init`, `src/ferry.c#ferry_answer`, `src/ferry.c#ferry_options`, `src/ferry.c#ferry_heavy`, `src/ferry.c#ferry_ending`, `src/ferry.c#ferry_value` | `tests/test_ferry.c#[order]` |
+| S20 | Pitching moment, $C_{m\alpha} = -C_{L\alpha}\,\text{SM}$, trim | [5](05-pitch.md) | `figures/pitch-moment.svg` | `src/pitch.c#pitch_default`, `src/pitch.c#pitch_cm_alpha`, `src/pitch.c#pitch_moment_coeff`, `src/pitch.c#pitch_trim_elevator`, `src/pitch.c#pitch_trim_alpha` | `tests/test_pitch.c#test_trim_is_an_equilibrium` |
+| S21 | Rigid-body equations $\dot\theta = q$, $I\dot q = M$ | [5](05-pitch.md) | mermaid, `figures/pitch-free.svg` | `src/pitch.c#pitch_step`, `src/pitch.c#pitch_alpha`, `src/pitch.c#pitch_trim` | `tests/test_pitch.c#test_energy_is_conserved_without_drag` |
+| S22 | Linearisation: short period and phugoid | [5](05-pitch.md) | `figures/root-locus.svg` | `src/pitch.c#pitch_jacobian`, `src/pitch.c#pitch_eigen`, `src/pitch.c#pitch_modes` | `tests/test_pitch.c#test_eigen_solver_on_a_known_matrix` |
+| S23 | Short-period approximation $\omega^2 = -M_\alpha - ZM_q$ | [5](05-pitch.md) | `figures/short-period-frequency.svg`, `figures/short-period-damping.svg` | `src/pitch.c#pitch_short_period_approx` | `tests/test_pitch.c#test_two_modes_and_the_short_period_approximation` |
+| S24 | Rigid-body phugoid, Lanchester $\times\sqrt{1 + Z\kappa}$ | [5](05-pitch.md) | `figures/pitch-phugoid.svg` | `src/pitch.c#pitch_phugoid_theory` | `tests/test_pitch.c#test_phugoid_without_pitch_damping_is_lanchester` |
+| S25 | Simulated response follows the eigenvalue | [5](05-pitch.md) | `figures/sp-response.svg` | `src/pitch.c#pitch_step` | `tests/test_pitch.c#test_response_matches_the_eigenvalue` |
+| S26 | Elevator step and the new trim | [5](05-pitch.md) | `figures/elevator-step.svg` | `src/pitch.c#pitch_trim_alpha`, `src/main.c#pitch_chart` | `tests/test_pitch.c#test_elevator_step_settles_at_the_moment_balance` |
+| S27 | Divergence behind the neutral point | [5](05-pitch.md) | `figures/divergence.svg` | `src/pitch.c#pitch_eigen` | `tests/test_pitch.c#test_negative_static_margin_diverges` |
+| S28 | RK4 stability limit on the short period | [5](05-pitch.md) | `figures/pitch-rk4.svg` | `src/pitch.c#pitch_step` | `tests/test_pitch.c#test_rk4_stability_limit` |
+| S29 | From the pitch model to the pitch laboratory | [5](05-pitch.md) | mermaid | `src/pitch_lab.c#pl_reset`, `src/pitch_lab.c#pl_elevator`, `src/pitch_lab.c#pl_kick`, `src/pitch_lab.c#pl_step`, `src/pitch_lab.c#pl_value` | `scripts/smoke.cjs#_pl_value` |
 
 Tests named `tests/theory_figs.c#…` are measurements recorded in [figures/values.md](figures/values.md) by `make theory-figs`, not assertions of `make test`. S09, S11 and S16 are covered only that way; turning them into assertions is a follow-up. Writing S17 down exposed a defect in the start value of the glide-made readout (issue #15), since fixed; the story numbers were retuned with it (see `docs/validation.md`).
 
@@ -79,4 +104,4 @@ Tests named `tests/theory_figs.c#…` are measurements recorded in [figures/valu
 
 ## Reading the source against this table
 
-Functions reviewed for this handbook: every declaration in `src/flight.h`, `src/observer.h`, `src/ferry.h`, `src/render.h`, `src/svg.h` and `src/gif.h`, plus the static helpers `derivative`, `advance` and `dynamic_pressure` in `src/flight.c` and `energy_height`, `glide_step`, `launch`, `start_hop`, `outland`, `clear_hop` in `src/ferry.c`. `src/main.c` (terminal program and plots) and `src/ferry_web.c` (WebAssembly wrapper) call these functions and state no law of their own.
+Functions reviewed for this handbook: every declaration in `src/flight.h`, `src/observer.h`, `src/ferry.h`, `src/pitch.h`, `src/pitch_lab.h`, `src/render.h`, `src/svg.h` and `src/gif.h`, plus the static helpers `derivative`, `advance` and `dynamic_pressure` in `src/flight.c` and `energy_height`, `glide_step`, `launch`, `start_hop`, `outland`, `clear_hop` in `src/ferry.c`, and `pitch_derivative`, `pitch_advance` in `src/pitch.c`. `src/main.c` (terminal program and plots) and `src/ferry_web.c` (WebAssembly wrapper) call these functions and state no law of their own.
