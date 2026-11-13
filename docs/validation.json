@@ -1,11 +1,18 @@
 {
-  "checks": 127,
-  "seconds": 980.657669886,
+  "checks": 160,
+  "seconds": 1876.101358727,
   "equivalence": {
     "rows": 903,
     "fields": 18,
     "maxError": 5.002220859751105e-12,
-    "tolerance": 1e-8
+    "tolerance": 1e-8,
+    "pitch": {
+      "spRe": -2.719862327658987,
+      "spIm": 3.192591464602676,
+      "phRe": -0.006474284391010921,
+      "phIm": 0.37160648059716983,
+      "trimAfterStep": 5.454545454545455
+    }
   },
   "errors": 0,
   "externalRequests": 0,
@@ -17,13 +24,13 @@
     "onRunway": 1
   },
   "manual": {
-    "time": 1.540000000000001,
+    "time": 1.4800000000000009,
     "command": 5,
     "throttle": 0.05
   },
   "phugoid": {
-    "time": 29.97999999999945,
-    "samples": 138
+    "time": 29.99999999999945,
+    "samples": 139
   },
   "ferry": [
     {
@@ -32,10 +39,10 @@
         "mill": 0
       },
       "scenes": 7,
-      "time": 1320,
+      "time": 1318.7,
       "outlandings": 9,
       "trailered": 3,
-      "low": 11.8
+      "low": 10.1
     },
     {
       "path": {
@@ -43,10 +50,10 @@
         "mill": 1
       },
       "scenes": 7,
-      "time": 1006.8,
+      "time": 998.4,
       "outlandings": 9,
       "trailered": 3,
-      "low": 341.7
+      "low": 361.8
     }
   ],
   "phone": {
@@ -97,6 +104,36 @@
       "hard": "Hard landing (sink 2 m/s or more). Tap “Fly again”; flare (+) low down."
     }
   },
+  "pitchLab": {
+    "desktop": {
+      "font": 14,
+      "target": 44,
+      "overflow": false,
+      "canvas": 462,
+      "departAt": 9.28
+    },
+    "laptop": {
+      "font": 14,
+      "target": 44,
+      "overflow": false,
+      "canvas": 254,
+      "departAt": 9.28
+    },
+    "portrait": {
+      "font": 14,
+      "target": 44,
+      "overflow": false,
+      "canvas": 336,
+      "departAt": 9.28
+    },
+    "landscape": {
+      "font": 14,
+      "target": 44,
+      "overflow": false,
+      "canvas": 376,
+      "departAt": 9.28
+    }
+  },
   "screenshots": [
     "before-terminal.jpg",
     "ferry-ending.jpg",
@@ -110,6 +147,9 @@
     "mobile.jpg",
     "observatory.jpg",
     "phugoid.jpg",
+    "pitch-lab-desktop.jpg",
+    "pitch-lab-diverge.jpg",
+    "pitch-lab-portrait.jpg",
     "stall.jpg"
   ]
 }

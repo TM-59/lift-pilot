@@ -9,6 +9,7 @@
 
 #include "flight.h"
 #include "gif.h"
+#include "pitch.h"
 #include "render.h"
 #include "svg.h"
 
@@ -66,6 +67,35 @@ static int headless(const char *dir)
     if (svg_plot(path, "Lift-to-drag ratio vs angle of attack", "alpha [deg]", "L/D", al, P, lr, 1)) return 1;
     printf("best L/D %.1f, trim V %.1f m/s\n", best_glide_ratio(&a), s.v);
     return 0;
+}
+
+/* Rigid-body pitch model: the angle of attack after a 1 degree nose-up elevator step from the 4 degree trim,
+ * for two centre-of-gravity positions (static margins), with the steady value the moment balance predicts. */
+static int pitch_chart(const char *path)
+{
+    enum { N = 501, SM = 2 };
+    static float t[N], al[SM][N], steady[SM][N];
+    double margins[SM] = {0.10, 0.30};
+    for (int m = 0; m < SM; m++) {
+        PitchAircraft p = pitch_default();
+        p.static_margin = margins[m];
+        PitchState s = {0.0, 1000.0, 0.0, 0.0, 0.0, 0.0};
+        pitch_trim(&p, deg(4.0), &s);
+        double elevator = pitch_trim_elevator(&p, deg(4.0)) - deg(1.0), target = pitch_trim_alpha(&p, elevator);
+        for (int i = 0; i < N; i++) {
+            if (i) pitch_step(&p, &s, elevator, 0.0, 0.016);
+            t[i] = (float)(0.016 * i);
+            al[m][i] = (float)(pitch_alpha(&s) * 180.0 / 3.14159265358979);
+            steady[m][i] = (float)(target * 180.0 / 3.14159265358979);
+        }
+        PitchMode sp, ph;
+        pitch_modes(&p, deg(4.0), &sp, &ph);
+        printf("static margin %.2f: short period %.3f rad/s, damping %.3f; steady alpha %.3f deg\n", margins[m], sp.wn, sp.zeta,
+               target * 180.0 / 3.14159265358979);
+    }
+    Series sr[] = {{"SM 0.10", al[0], "#1f77b4"}, {"steady, SM 0.10", steady[0], "#aec7e8"},
+                   {"SM 0.30", al[1], "#2ca02c"}, {"steady, SM 0.30", steady[1], "#98df8a"}};
+    return svg_plot(path, "Short period: alpha after a 1 deg nose-up elevator step", "t [s]", "alpha [deg]", t, N, sr, 4) ? 1 : 0;
 }
 
 static int snapshot(void)
@@ -186,6 +216,7 @@ int main(int argc, char **argv)
 {
     if (argc > 1 && strcmp(argv[1], "--headless") == 0) return headless(argc > 2 ? argv[2] : ".");
     if (argc > 1 && strcmp(argv[1], "--snapshot") == 0) return snapshot();
+    if (argc > 1 && strcmp(argv[1], "--pitch") == 0) return pitch_chart(argc > 2 ? argv[2] : "pitch.svg");
     if (argc > 1 && strcmp(argv[1], "--gif") == 0) return gif_demo(argc > 2 ? argv[2] : "demo.gif");
     return play();
 }

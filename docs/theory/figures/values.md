@@ -33,3 +33,33 @@ SI units: m, s, kg, N, rad unless a row says otherwise. Default aircraft: 300 kg
 | `need-start` | glide needed at the start of hop 1 (theory (2500 + 80) / (82 + (V^2 - 25^2) / 2g)) | 28.0309 | 28.0309 | 0.00e+00 |
 | `making-start` | glide-made readout at the start of a hop (theory: the steady 4 deg launch glide, ground speed over sink) | 26.7626 | 26.7626 | 0.00e+00 |
 | `low-start` | LOW gauge at the start: needed above made (1 = on) | 1 | 1 | 0.00e+00 |
+| `cm-slope` | slope dCm/dalpha of the code at SM 0.15, per rad (theory -CLalpha x SM = -0.825) | -0.825 | -0.825 | 9.10e-15 |
+| `cm-trim-elevator` | elevator that trims 4 deg at SM 0.15, deg (theory -(Cm0 + Cmalpha x 4 deg) / Cmde) | -0.362676 | -0.362676 | 0.00e+00 |
+| `cm-trim-alpha` | angle of attack where Cm = 0 for that elevator, deg (theory 4) | 4 | 4 | 0.00e+00 |
+| `pitch-trim-drift` | largest change of alpha over 30 s of the trimmed rigid-body glide, rad (ideal 0) | 0 | 0 | 0.00e+00 |
+| `pitch-trim-speed` | airspeed after 30 s, m/s (theory: the 4 deg steady glide of S06) | 28.6695 | 28.6695 | 0.00e+00 |
+| `pitch-energy` | largest relative change of V^2/2 + g h over 30 s with CD = 0, pitching freely (ideal 0) | 2.10054e-13 | 0 | 2.10e-13 |
+| `modes-oscillatory` | two complex pairs at SM 0.15 (1 = yes) | 1 | 1 | 0.00e+00 |
+| `sp-eig-re` | short-period eigenvalue, real part, 1/s (reported) | -2.71986 | -2.71986 | 0.00e+00 |
+| `sp-eig-im` | short-period eigenvalue, imaginary part, rad/s (reported) | 3.19259 | 3.19259 | 0.00e+00 |
+| `ph-eig-re` | phugoid eigenvalue, real part, 1/s (reported) | -0.00647428 | -0.00647428 | 0.00e+00 |
+| `ph-eig-im` | phugoid eigenvalue, imaginary part, rad/s (reported) | 0.371606 | 0.371606 | 0.00e+00 |
+| `mode-separation` | short-period over phugoid natural frequency at SM 0.15 (reported) | 11.2846 | 11.2846 | 0.00e+00 |
+| `eigen-check` | eigenvalue solver on a known matrix: imaginary part of the pair (theory 2) | 2 | 2 | 0.00e+00 |
+| `sp-wn` | short-period natural frequency at SM 0.15 from the eigenvalue, rad/s (theory: the approximation) | 4.19408 | 4.17731 | 4.01e-03 |
+| `sp-zeta` | short-period damping ratio at SM 0.15 from the eigenvalue (theory: the approximation) | 0.648501 | 0.648067 | 6.69e-04 |
+| `sp-wn-0.05` | the same at SM 0.05, rad/s (theory: the approximation) | 3.26297 | 3.24463 | 5.65e-03 |
+| `ph-period` | phugoid period of the rigid body at SM 0.15 from the eigenvalue, s (theory: Lanchester with pitch damping) | 16.9082 | 16.838 | 4.17e-03 |
+| `ph-period-no-damping` | the same with Cmq = 0, s (theory: Lanchester pi sqrt(2) V / g) | 13.0888 | 12.9887 | 7.71e-03 |
+| `sp-measured-wd` | damped frequency from the zero crossings of the simulated pitch rate, rad/s (theory: imaginary part of the eigenvalue) | 3.19196 | 3.19259 | 1.98e-04 |
+| `sp-measured-zeta` | damping ratio from the ratio of successive peaks (theory: the eigenvalue) | 0.64876 | 0.648501 | 4.00e-04 |
+| `step-alpha` | angle of attack 3000 s after a 1 deg nose-up step, deg (theory -(Cm0 + Cmde de) / Cmalpha) | 5.4546 | 5.45455 | 9.68e-06 |
+| `step-delta` | change of the steady angle of attack, deg (theory Cmde x 1 deg / Cmalpha = 1.4545) | 1.45455 | 1.45455 | 2.22e-16 |
+| `diverge-lambda` | positive real eigenvalue at SM -0.05, 1/s (reported) | 0.334658 | 0.334658 | 0.00e+00 |
+| `diverge-rate` | growth rate of the simulated alpha disturbance between 10 s and 16 s, 1/s (theory: the eigenvalue) | 0.334745 | 0.334658 | 2.60e-04 |
+| `det-plus` | product of the eigenvalues (det A) at SM 0.05, 1/s^4 (theory: positive) | 0.809935 | 0.809935 | 0.00e+00 |
+| `det-minus` | product of the eigenvalues (det A) at SM -0.05, 1/s^4 (theory: negative) | -0.809935 | -0.809935 | 0.00e+00 |
+| `approx-wn-minus` | short-period approximation at SM -0.05, rad/s (positive: the approximation misses the divergence) | 1.89878 | 1.89878 | 0.00e+00 |
+| `neutral-root` | smallest eigenvalue modulus at SM 0 (theory 0: neutral stability) | 6.22432e-16 | 0 | 6.22e-16 |
+| `rk4-pitch-limit` | largest stable step from the simulation (bisection), s (theory: abs R(lambda dt) = 1) | 0.63339 | 0.63339 | 5.42e-08 |
+| `rk4-pitch-margin` | that limit over the game step 0.02 s (reported) | 31.6695 | 31.6695 | 0.00e+00 |

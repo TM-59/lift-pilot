@@ -1,7 +1,7 @@
 CC      ?= cc
 CFLAGS  ?= -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror
 LDLIBS  += -lm
-SRC     := src/flight.c src/svg.c src/render.c src/gif.c
+SRC     := src/flight.c src/svg.c src/render.c src/gif.c src/pitch.c
 EMCC    ?= emcc
 PYTHON  ?= python3
 PORT    ?= 4215
@@ -14,6 +14,9 @@ lift-pilot: $(SRC) src/main.c
 
 test_flight: $(SRC) tests/test_flight.c
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
+
+test_pitch: src/flight.c src/pitch.c tests/test_pitch.c src/flight.h src/pitch.h tests/pitch_measure.h
+	$(CC) $(CFLAGS) -o $@ $(filter %.c,$^) $(LDLIBS)
 
 test_gif: src/gif.c tests/test_gif.c
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
@@ -32,8 +35,9 @@ story_bench: $(FERRY) tests/story_bench.c $(FERRY_H)
 
 # The story rows are compared byte for byte; generate and check them with the
 # Debian 13 toolchain of the Dockerfile so libm rounds the same way everywhere.
-test: test_flight test_gif test_observer test_ferry story_bench
+test: test_flight test_pitch test_gif test_observer test_ferry story_bench
 	./test_flight
+	./test_pitch
 	./test_gif
 	./test_observer
 	./test_ferry
@@ -59,16 +63,16 @@ bench: test_observer
 	./test_observer --trace > build/native-trace.csv
 
 web: dist/physics.mjs
-	cp web/index.html web/style.css web/app.mjs dist/
+	cp web/index.html web/style.css web/app.mjs web/pitch-lab.mjs dist/
 	mkdir -p dist/art
 	cp assets/art/* dist/art/
 	$(PYTHON) scripts/check-size.py
 
-dist/physics.mjs: src/flight.c src/observer.c src/flight.h src/observer.h src/ferry.c src/ferry.h src/ferry_web.c
+dist/physics.mjs: src/flight.c src/observer.c src/flight.h src/observer.h src/ferry.c src/ferry.h src/ferry_web.c src/pitch.c src/pitch.h src/pitch_lab.c src/pitch_lab.h
 	mkdir -p dist
-	$(EMCC) $(CFLAGS) src/flight.c src/observer.c src/ferry.c src/ferry_web.c -lm --no-entry -o $@ \
+	$(EMCC) $(CFLAGS) src/flight.c src/observer.c src/ferry.c src/ferry_web.c src/pitch.c src/pitch_lab.c -lm --no-entry -o $@ \
 	  -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,node -sFILESYSTEM=0 \
-	  -sEXPORTED_FUNCTIONS=_lp_reset,_lp_controls,_lp_step,_lp_value,_fw_reset,_fw_tick,_fw_answer,_fw_value
+	  -sEXPORTED_FUNCTIONS=_lp_reset,_lp_controls,_lp_step,_lp_value,_fw_reset,_fw_tick,_fw_answer,_fw_value,_pl_reset,_pl_elevator,_pl_kick,_pl_step,_pl_value
 
 play: web
 	$(PYTHON) -m http.server $(PORT) --bind 127.0.0.1 --directory dist
@@ -81,11 +85,12 @@ plots: lift-pilot
 	mkdir -p docs
 	./lift-pilot --headless docs
 	./lift-pilot --gif docs/demo.gif
+	./lift-pilot --pitch docs/pitch.svg
 	head -c6 docs/demo.gif | grep -q GIF89a
 
 # Regenerates the plotted figures and the measured-values table of docs/theory (one command).
-theory_figs: $(FERRY) src/svg.c tests/theory_figs.c src/flight.h src/ferry.h src/svg.h
-	$(CC) $(CFLAGS) -o $@ $(FERRY) src/svg.c tests/theory_figs.c $(LDLIBS)
+theory_figs: $(FERRY) src/pitch.c src/svg.c tests/theory_figs.c src/flight.h src/ferry.h src/svg.h src/pitch.h tests/pitch_measure.h
+	$(CC) $(CFLAGS) -o $@ $(FERRY) src/pitch.c src/svg.c tests/theory_figs.c $(LDLIBS)
 
 theory-figs: theory_figs
 	mkdir -p docs/theory/figures
@@ -96,5 +101,5 @@ theory-check:
 	$(PYTHON) scripts/theory-check.py
 
 clean:
-	rm -f lift-pilot test_flight test_gif test_observer test_ferry story_bench
+	rm -f lift-pilot test_flight test_pitch test_gif test_observer test_ferry story_bench
 	rm -rf build dist

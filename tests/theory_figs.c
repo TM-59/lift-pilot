@@ -4,6 +4,7 @@
 #include "../src/ferry.h"
 #include "../src/flight.h"
 #include "../src/svg.h"
+#include "pitch_measure.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -330,6 +331,322 @@ static void fig_gauges(void)
     plot("gauges.svg", "Glide needed and glide made along the first hop", "distance flown [m]", "glide ratio", n, q, 3);
 }
 
+
+/* ---- 05: rigid-body pitch dynamics (src/pitch.c) ---- */
+
+/* 12: the pitching moment against angle of attack, each centre of gravity trimmed at 4 deg. */
+static void fig_moment(void)
+{
+    double margins[4] = {0.30, 0.15, 0.0, -0.05};
+    float *ys[4] = {ya, yb, yc, NULL};
+    static float yd[MAXN];
+    ys[3] = yd;
+    int n = 121;
+    for (int m = 0; m < 4; m++) {
+        PitchAircraft p = pitch_default();
+        p.static_margin = margins[m];
+        double de = pitch_trim_elevator(&p, PM_ALPHA);
+        for (int i = 0; i < n; i++) {
+            double deg = -2.0 + 0.1 * i;
+            xs[i] = (float)deg;
+            ys[m][i] = (float)pitch_moment_coeff(&p, deg * DEG, 0.0, de);
+        }
+    }
+    PitchAircraft p = pitch_default();
+    double de = pitch_trim_elevator(&p, PM_ALPHA), h = 1e-4;
+    value("cm-slope", "slope dCm/dalpha of the code at SM 0.15, per rad (theory -CLalpha x SM = -0.825)",
+          (pitch_moment_coeff(&p, PM_ALPHA + h, 0.0, de) - pitch_moment_coeff(&p, PM_ALPHA - h, 0.0, de)) / (2.0 * h), -5.5 * 0.15);
+    value("cm-trim-elevator", "elevator that trims 4 deg at SM 0.15, deg (theory -(Cm0 + Cmalpha x 4 deg) / Cmde)", de / DEG,
+          -(0.05 - 0.825 * PM_ALPHA) / -1.2 / DEG);
+    value("cm-trim-alpha", "angle of attack where Cm = 0 for that elevator, deg (theory 4)", pitch_trim_alpha(&p, de) / DEG, 4.0);
+    Series s[] = {{"SM 0.30", ya, "#2ca02c"}, {"SM 0.15", yb, "#1f77b4"}, {"SM 0 (neutral)", yc, "#888888"}, {"SM -0.05", yd, "#d62728"}};
+    plot("pitch-moment.svg", "Pitching moment, elevator set to trim 4 deg", "angle of attack [deg]", "Cm", n, s, 4);
+}
+
+/* 13: the trimmed glide of the rigid body stays put; and V^2/2 + g h is conserved with the drag removed. */
+static void fig_pitch_trim(void)
+{
+    PitchAircraft p = pitch_default();
+    double de;
+    PitchState s = pm_trimmed(&p, &de);
+    double v0 = s.v, worst_a = 0.0;
+    PitchAircraft clean = p;
+    clean.base.cd0 = clean.base.k = 0.0;
+    PitchState c = {0.0, 500.0, 30.0, 0.0, 5.0 * DEG, 0.2};
+    double e0 = 0.5 * c.v * c.v + GRAVITY * c.h, worst_e = 0.0;
+    int n = 151;
+    for (int i = 0; i < n; i++) {
+        if (i) for (int k = 0; k < 10; k++) { pitch_step(&p, &s, de, 0.0, 0.02); pitch_step(&clean, &c, 0.0, 0.0, 0.02); }
+        double e = 0.5 * c.v * c.v + GRAVITY * c.h;
+        xs[i] = (float)(0.2 * i);
+        ya[i] = (float)(c.theta / DEG);
+        yb[i] = (float)((c.theta - c.gamma) / DEG);
+        yc[i] = (float)((e - e0) / GRAVITY * 1e6);
+        if (fabs(pitch_alpha(&s) - PM_ALPHA) > worst_a) worst_a = fabs(pitch_alpha(&s) - PM_ALPHA);
+        if (fabs(e / e0 - 1.0) > worst_e) worst_e = fabs(e / e0 - 1.0);
+    }
+    value("pitch-trim-drift", "largest change of alpha over 30 s of the trimmed rigid-body glide, rad (ideal 0)", worst_a, 0.0);
+    value("pitch-trim-speed", "airspeed after 30 s, m/s (theory: the 4 deg steady glide of S06)", s.v, v0);
+    value("pitch-energy", "largest relative change of V^2/2 + g h over 30 s with CD = 0, pitching freely (ideal 0)", worst_e, 0.0);
+    Series e[] = {{"pitch attitude [deg]", ya, "#1f77b4"}, {"angle of attack [deg]", yb, "#d62728"}, {"energy change [um]", yc, "#888888"}};
+    plot("pitch-free.svg", "Rigid body released at 5 deg, 0.2 rad/s, drag removed", "time [s]", "deg / micrometre", n, e, 3);
+}
+
+/* 14: the four eigenvalues in the complex plane as the centre of gravity moves (root locus). Hand-written SVG:
+ * two panels, the whole plane and a zoom on the phugoid near the origin. */
+static void fig_root_locus(void)
+{
+    FILE *f = fopen(path("root-locus.svg"), "w");
+    if (!f) { fprintf(stderr, "cannot write root-locus.svg\n"); exit(1); }
+    const int W = 720, H = 400, T = 50, B = 340;
+    struct { double x0, x1, y0, y1; int l, r; const char *title; } pan[2] = {
+        {-6.0, 1.0, -5.0, 5.0, 60, 360, "all four eigenvalues"}, {-0.7, 0.7, -0.7, 0.7, 430, 700, "zoom: phugoid and divergence"}};
+    fprintf(f, "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 %d %d\" width=\"%d\" height=\"%d\" font-family=\"sans-serif\" font-size=\"12\">\n", W, H, W, H);
+    fprintf(f, "<rect width=\"%d\" height=\"%d\" fill=\"#ffffff\"/>\n<text x=\"60\" y=\"24\" font-size=\"16\" font-weight=\"bold\" fill=\"#222\">Root locus: static margin -0.10 (red) to 0.30 (blue)</text>\n", W, H);
+    for (int k = 0; k < 2; k++) {
+        double sx = (pan[k].r - pan[k].l) / (pan[k].x1 - pan[k].x0), sy = (B - T) / (pan[k].y1 - pan[k].y0);
+        double zx = pan[k].l - pan[k].x0 * sx, zy = T + pan[k].y1 * sy;
+        fprintf(f, "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" fill=\"none\" stroke=\"#888\"/>\n", pan[k].l, T, pan[k].r - pan[k].l, B - T);
+        fprintf(f, "<rect x=\"%.1f\" y=\"%d\" width=\"%.1f\" height=\"%d\" fill=\"#fdecea\"/>\n", zx, T, pan[k].r - zx, B - T);
+        fprintf(f, "<line x1=\"%.1f\" y1=\"%d\" x2=\"%.1f\" y2=\"%d\" stroke=\"#444\"/><line x1=\"%d\" y1=\"%.1f\" x2=\"%d\" y2=\"%.1f\" stroke=\"#444\"/>\n",
+                zx, T, zx, B, pan[k].l, zy, pan[k].r, zy);
+        fprintf(f, "<text x=\"%d\" y=\"%d\" fill=\"#222\">%s</text>\n", pan[k].l, T - 8, pan[k].title);
+        fprintf(f, "<text x=\"%d\" y=\"%d\" fill=\"#444\">%g</text><text x=\"%d\" y=\"%d\" text-anchor=\"end\" fill=\"#444\">%g</text>\n",
+                pan[k].l, B + 16, pan[k].x0, pan[k].r, B + 16, pan[k].x1);
+        fprintf(f, "<text x=\"%d\" y=\"%d\" text-anchor=\"end\" fill=\"#444\">%g</text><text x=\"%d\" y=\"%d\" text-anchor=\"end\" fill=\"#444\">%g</text>\n",
+                pan[k].l - 4, T + 10, pan[k].y1, pan[k].l - 4, B, pan[k].y0);
+        fprintf(f, "<text x=\"%d\" y=\"%d\" text-anchor=\"middle\" fill=\"#222\">real part [1/s] (shaded: unstable)</text>\n", (pan[k].l + pan[k].r) / 2, B + 32);
+        for (int i = 0; i <= 80; i++) {
+            PitchAircraft p = pitch_default();
+            p.static_margin = -0.10 + 0.005 * i;
+            double de, a[4][4], re[4], im[4];
+            PitchState s = pm_trimmed(&p, &de);
+            pitch_jacobian(&p, &s, de, a);
+            pitch_eigen(a, re, im);
+            int red = (int)(214 - 183 * i / 80.0), green = (int)(39 + 80 * i / 80.0), blue = (int)(40 + 140 * i / 80.0);
+            for (int j = 0; j < 4; j++) {
+                double x = zx + re[j] * sx, y = zy - im[j] * sy;
+                if (x < pan[k].l || x > pan[k].r || y < T || y > B) continue;
+                fprintf(f, "<circle cx=\"%.1f\" cy=\"%.1f\" r=\"%s\" fill=\"rgb(%d,%d,%d)\"/>\n", x, y, i == 50 ? "4.5" : "2", red, green, blue);
+            }
+        }
+    }
+    fprintf(f, "<text x=\"16\" y=\"%d\" transform=\"rotate(-90 16 %d)\" text-anchor=\"middle\" fill=\"#222\">imaginary part [rad/s]</text>\n", (T + B) / 2, (T + B) / 2);
+    fprintf(f, "<text x=\"60\" y=\"392\" fill=\"#222\">large dots: the default, static margin 0.15</text>\n</svg>\n");
+    if (fclose(f) != 0) exit(1);
+    PitchAircraft p = pitch_default();
+    PitchMode sp, ph;
+    int two = pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    value("modes-oscillatory", "two complex pairs at SM 0.15 (1 = yes)", two, 1.0);
+    value("sp-eig-re", "short-period eigenvalue, real part, 1/s (reported)", sp.re, sp.re);
+    value("sp-eig-im", "short-period eigenvalue, imaginary part, rad/s (reported)", sp.im, sp.im);
+    value("ph-eig-re", "phugoid eigenvalue, real part, 1/s (reported)", ph.re, ph.re);
+    value("ph-eig-im", "phugoid eigenvalue, imaginary part, rad/s (reported)", ph.im, ph.im);
+    value("mode-separation", "short-period over phugoid natural frequency at SM 0.15 (reported)", sp.wn / ph.wn, sp.wn / ph.wn);
+    double a[4][4] = {{-1, 2, 0, 0}, {-2, -1, 0, 0}, {0, 0, 3, 0}, {0, 0, 0, -0.5}}, re[4], im[4];
+    pitch_eigen(a, re, im);
+    value("eigen-check", "eigenvalue solver on a known matrix: imaginary part of the pair (theory 2)", im[1], 2.0);
+}
+
+/* 15/16: the short-period natural frequency and damping against the static margin: eigenvalues and the approximation. */
+static void fig_short_period(void)
+{
+    int n = 0;
+    for (double sm = 0.03; sm <= 0.3001; sm += 0.005, n++) {
+        PitchAircraft p = pitch_default();
+        p.static_margin = sm;
+        PitchMode sp, ph;
+        pitch_modes(&p, PM_ALPHA, &sp, &ph);
+        double wn, zeta;
+        pitch_short_period_approx(&p, PM_ALPHA, &wn, &zeta);
+        xs[n] = (float)sm;
+        ya[n] = (float)sp.wn;
+        yb[n] = (float)wn;
+    }
+    Series w[] = {{"eigenvalue", ya, "#1f77b4"}, {"approximation", yb, "#d62728"}};
+    plot("short-period-frequency.svg", "Short-period natural frequency", "static margin", "wn [rad/s]", n, w, 2);
+    n = 0;
+    for (double sm = 0.03; sm <= 0.3001; sm += 0.005, n++) {
+        PitchAircraft p = pitch_default();
+        p.static_margin = sm;
+        PitchMode sp, ph;
+        pitch_modes(&p, PM_ALPHA, &sp, &ph);
+        double wn, zeta;
+        pitch_short_period_approx(&p, PM_ALPHA, &wn, &zeta);
+        xs[n] = (float)sm;
+        ya[n] = (float)sp.zeta;
+        yb[n] = (float)zeta;
+    }
+    Series z[] = {{"eigenvalue", ya, "#1f77b4"}, {"approximation", yb, "#d62728"}};
+    plot("short-period-damping.svg", "Short-period damping ratio", "static margin", "zeta", n, z, 2);
+    PitchAircraft p = pitch_default();
+    PitchMode sp, ph;
+    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    double wn, zeta;
+    pitch_short_period_approx(&p, PM_ALPHA, &wn, &zeta);
+    value("sp-wn", "short-period natural frequency at SM 0.15 from the eigenvalue, rad/s (theory: the approximation)", sp.wn, wn);
+    value("sp-zeta", "short-period damping ratio at SM 0.15 from the eigenvalue (theory: the approximation)", sp.zeta, zeta);
+    p.static_margin = 0.05;
+    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    pitch_short_period_approx(&p, PM_ALPHA, &wn, &zeta);
+    value("sp-wn-0.05", "the same at SM 0.05, rad/s (theory: the approximation)", sp.wn, wn);
+}
+
+/* 17: the phugoid period of the rigid body against the static margin: eigenvalue, corrected Lanchester, Lanchester. */
+static void fig_pitch_phugoid(void)
+{
+    int n = 0;
+    double lanchester = 0.0;
+    for (double sm = 0.03; sm <= 0.3001; sm += 0.005, n++) {
+        PitchAircraft p = pitch_default();
+        p.static_margin = sm;
+        PitchMode sp, ph;
+        pitch_modes(&p, PM_ALPHA, &sp, &ph);
+        double de;
+        PitchState s = pm_trimmed(&p, &de);
+        lanchester = PM_PI * sqrt(2.0) * s.v / GRAVITY;
+        xs[n] = (float)sm;
+        ya[n] = (float)ph.period;
+        yb[n] = (float)pitch_phugoid_theory(&p, PM_ALPHA);
+        yc[n] = (float)lanchester;
+    }
+    PitchAircraft p = pitch_default();
+    PitchMode sp, ph;
+    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    value("ph-period", "phugoid period of the rigid body at SM 0.15 from the eigenvalue, s (theory: Lanchester with pitch damping)", ph.period,
+          pitch_phugoid_theory(&p, PM_ALPHA));
+    p.cm_q = 0.0;
+    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    value("ph-period-no-damping", "the same with Cmq = 0, s (theory: Lanchester pi sqrt(2) V / g)", ph.period, lanchester);
+    Series s[] = {{"eigenvalue", ya, "#1f77b4"}, {"Lanchester x sqrt(1 + Z kappa)", yb, "#d62728"}, {"Lanchester", yc, "#888888"}};
+    plot("pitch-phugoid.svg", "Phugoid period of the rigid-body glider", "static margin", "period [s]", n, s, 3);
+}
+
+/* 18: the simulated pitch rate started on the short-period eigenvector, with the eigenvalue's envelope. */
+static void fig_sp_response(void)
+{
+    PitchAircraft p = pitch_default();
+    PitchMode sp, ph;
+    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    double de;
+    PitchState s = pm_short_period_start(&p, 0.01, &de);
+    double amp = 0.01;   /* the start is 0.01 x Re(v) with v_q = 1: q(t) = 0.01 exp(re t) cos(im t) */
+    int n = 201;
+    for (int i = 0; i < n; i++) {
+        if (i) for (int k = 0; k < 5; k++) pitch_step(&p, &s, de, 0.0, 0.002);
+        double t = 0.01 * i;
+        xs[i] = (float)t;
+        ya[i] = (float)(s.q / DEG);
+        yb[i] = (float)(amp * exp(sp.re * t) / DEG);
+        yc[i] = -yb[i];
+    }
+    double wd, zeta, wn;
+    pm_short_period_response(&p, &wd, &zeta, &wn);
+    value("sp-measured-wd", "damped frequency from the zero crossings of the simulated pitch rate, rad/s (theory: imaginary part of the eigenvalue)", wd, sp.im);
+    value("sp-measured-zeta", "damping ratio from the ratio of successive peaks (theory: the eigenvalue)", zeta, sp.zeta);
+    Series r[] = {{"pitch rate q", ya, "#1f77b4"}, {"+ 0.01 exp(re t)", yb, "#d62728"}, {"- 0.01 exp(re t)", yc, "#d62728"}};
+    plot("sp-response.svg", "Short period: simulated pitch rate and the eigenvalue envelope", "time [s]", "q [deg/s]", n, r, 3);
+}
+
+/* 19: a 1 deg nose-up elevator step: the short period settles alpha in about a second, the phugoid follows. */
+static void fig_elevator_step(void)
+{
+    PitchAircraft p = pitch_default();
+    double de;
+    PitchState s = pm_trimmed(&p, &de);
+    double step = de - 1.0 * DEG, target = pitch_trim_alpha(&p, step);
+    int n = 401;
+    for (int i = 0; i < n; i++) {
+        if (i) for (int k = 0; k < 5; k++) pitch_step(&p, &s, step, 0.0, 0.02);
+        xs[i] = (float)(0.1 * i);
+        ya[i] = (float)(pitch_alpha(&s) / DEG);
+        yb[i] = (float)(target / DEG);
+        yc[i] = (float)(s.v / 5.0);
+    }
+    for (int k = 0; k < 150000 - 20000; k++) pitch_step(&p, &s, step, 0.0, 0.02);
+    value("step-alpha", "angle of attack 3000 s after a 1 deg nose-up step, deg (theory -(Cm0 + Cmde de) / Cmalpha)", pitch_alpha(&s) / DEG, target / DEG);
+    value("step-delta", "change of the steady angle of attack, deg (theory Cmde x 1 deg / Cmalpha = 1.4545)", (target - PM_ALPHA) / DEG, -1.2 / -0.825);
+    Series r[] = {{"alpha [deg]", ya, "#1f77b4"}, {"moment balance [deg]", yb, "#d62728"}, {"airspeed / 5 [m/s]", yc, "#2ca02c"}};
+    plot("elevator-step.svg", "Elevator step: 1 deg trailing edge up at t = 0", "time [s]", "deg, m/s / 5", n, r, 3);
+}
+
+/* 20: behind the neutral point the disturbance grows as exp(lambda t), lambda the positive real eigenvalue. */
+static void fig_divergence(void)
+{
+    PitchAircraft p = pitch_default();
+    p.static_margin = -0.05;
+    double de, a[4][4], re[4], im[4], lambda = -1.0;
+    PitchState s = pm_trimmed(&p, &de);
+    pitch_jacobian(&p, &s, de, a);
+    pitch_eigen(a, re, im);
+    for (int i = 0; i < 4; i++) if (im[i] == 0.0 && re[i] > lambda) lambda = re[i];
+    double a0 = pitch_alpha(&s);
+    s.theta += 1e-5;
+    int n = 161;
+    double ref = 0.0;
+    for (int i = 0; i < n; i++) {
+        if (i) for (int k = 0; k < 50; k++) pitch_step(&p, &s, de, 0.0, 0.002);
+        double t = 0.1 * i, d = fabs(pitch_alpha(&s) - a0);
+        if (i == 100) ref = log10(d) - lambda * t / log(10.0);
+        xs[i] = (float)t;
+        ya[i] = (float)log10(d);
+    }
+    for (int i = 0; i < n; i++) yb[i] = (float)(ref + lambda * xs[i] / log(10.0));
+    value("diverge-lambda", "positive real eigenvalue at SM -0.05, 1/s (reported)", lambda, lambda);
+    value("diverge-rate", "growth rate of the simulated alpha disturbance between 10 s and 16 s, 1/s (theory: the eigenvalue)", pm_growth_rate(&p, 10.0, 16.0), lambda);
+    /* the product of the four eigenvalues is det A; it changes sign with the static margin */
+    for (int k = 0; k < 2; k++) {
+        PitchAircraft q = pitch_default();
+        q.static_margin = k ? -0.05 : 0.05;
+        PitchState t = pm_trimmed(&q, &de);
+        double b[4][4], r[4], m[4];
+        pitch_jacobian(&q, &t, de, b);
+        pitch_eigen(b, r, m);
+        double complex det = 1.0;
+        for (int i = 0; i < 4; i++) det *= r[i] + m[i] * I;
+        value(k ? "det-minus" : "det-plus", k ? "product of the eigenvalues (det A) at SM -0.05, 1/s^4 (theory: negative)" : "product of the eigenvalues (det A) at SM 0.05, 1/s^4 (theory: positive)",
+              creal(det), creal(det));
+    }
+    {   /* the two-state approximation still calls SM -0.05 stable: its stiffness -M_alpha - Z M_q stays positive */
+        PitchAircraft q = pitch_default();
+        q.static_margin = -0.05;
+        double wn, zeta;
+        pitch_short_period_approx(&q, PM_ALPHA, &wn, &zeta);
+        value("approx-wn-minus", "short-period approximation at SM -0.05, rad/s (positive: the approximation misses the divergence)", wn, wn);
+    }
+    p.static_margin = 0.0;
+    s = pm_trimmed(&p, &de);
+    pitch_jacobian(&p, &s, de, a);
+    pitch_eigen(a, re, im);
+    double smallest = fabs(re[3]);
+    value("neutral-root", "smallest eigenvalue modulus at SM 0 (theory 0: neutral stability)", smallest, 0.0);
+    Series r[] = {{"log10 |alpha - trim| [rad]", ya, "#d62728"}, {"slope lambda / ln 10", yb, "#888888"}};
+    plot("divergence.svg", "Static margin -0.05: a 1e-5 rad nudge diverges", "time [s]", "log10 |delta alpha| [rad]", n, r, 2);
+}
+
+/* 21: the RK4 amplification factor along the short-period eigenvalue: the step must stay below |R| = 1. */
+static void fig_pitch_rk4(void)
+{
+    PitchAircraft p = pitch_default();
+    PitchMode sp, ph;
+    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    double complex lambda = sp.re + sp.im * I;
+    int n = 161;
+    for (int i = 0; i < n; i++) {
+        double dt = 0.005 * i;
+        double complex z = lambda * dt, r = 1.0 + z + z * z / 2.0 + z * z * z / 6.0 + z * z * z * z / 24.0;
+        xs[i] = (float)dt;
+        ya[i] = (float)cabs(r);
+        yb[i] = 1.0f;
+        yc[i] = (float)exp(sp.re * dt);
+    }
+    double theory = pm_rk4_limit_theory(&sp);
+    value("rk4-pitch-limit", "largest stable step from the simulation (bisection), s (theory: abs R(lambda dt) = 1)", pm_rk4_limit_measured(&p), theory);
+    value("rk4-pitch-margin", "that limit over the game step 0.02 s (reported)", theory / 0.02, theory / 0.02);
+    Series r[] = {{"|R(lambda dt)|", ya, "#1f77b4"}, {"1 (neutral)", yb, "#888888"}, {"exact exp(re dt)", yc, "#d62728"}};
+    plot("pitch-rk4.svg", "RK4 growth per step on the short-period eigenvalue", "step dt [s]", "amplification per step", n, r, 3);
+}
+
 int main(int argc, char **argv)
 {
     snprintf(dir, sizeof dir, "%s", argc > 1 ? argv[1] : "docs/theory/figures");
@@ -349,6 +666,15 @@ int main(int argc, char **argv)
     fig_touchdown();
     fig_air();
     fig_gauges();
+    fig_moment();
+    fig_pitch_trim();
+    fig_root_locus();
+    fig_short_period();
+    fig_pitch_phugoid();
+    fig_sp_response();
+    fig_elevator_step();
+    fig_divergence();
+    fig_pitch_rk4();
     if (fclose(values) != 0) return 1;
     printf("theory figures written to %s\n", dir);
     return 0;

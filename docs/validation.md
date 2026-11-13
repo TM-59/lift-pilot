@@ -1,3 +1,24 @@
+# M2: rigid-body pitch model (2026-11-14, issue #2)
+
+A separate model, `src/pitch.c`, adds pitch attitude, pitch rate, a pitching moment (static margin, pitch damping, elevator) to the point-mass equations. `src/flight.c`, the laboratory and The Last Ferry are not changed: `docs/run.csv`, the four SVG charts, `docs/demo.gif`, the three files of `docs/narrative/` and the 13 earlier theory figures are byte for byte the same; the issue's sentence "replace the lag" was carried out as "add the model beside the lag" for that reason.
+
+| Check (default glider, 4 deg glide, static margin 0.15 unless noted) | Measured | Theory | Relative difference |
+|---|---|---|---|
+| short-period natural frequency, eigenvalue vs two-state approximation | 4.19408 rad/s | 4.17731 rad/s | 4.0e-3 |
+| short-period damping ratio | 0.648501 | 0.648067 | 6.7e-4 |
+| the same frequency at static margin 0.05 | 3.26297 rad/s | 3.24463 rad/s | 5.7e-3 |
+| damped frequency from the simulated pitch rate vs the eigenvalue | 3.19196 rad/s | 3.19259 rad/s | 2.0e-4 |
+| damping ratio from successive peaks vs the eigenvalue | 0.64876 | 0.648501 | 4.0e-4 |
+| phugoid period vs Lanchester with pitch damping | 16.9082 s | 16.838 s | 4.2e-3 |
+| phugoid period with Cmq = 0 vs Lanchester | 13.0888 s | 12.9887 s | 7.7e-3 |
+| steady alpha 3000 s after a 1 deg elevator step vs the moment balance | 5.4546 deg | 5.45455 deg | 9.7e-6 |
+| growth rate at static margin -0.05 vs the positive real eigenvalue | 0.334745 /s | 0.334658 /s | 2.6e-4 |
+| largest stable RK4 step, simulation vs amplification factor | 0.63339 s | 0.63339 s | 5.4e-8 |
+
+The rows are written by `make theory-figs` into `docs/theory/figures/values.md` and asserted with tolerances in `tests/test_pitch.c` (9 tests). `make test`, `make story-check`, `make plots`, `make theory-check` (29 statements, 23 generated figures) pass. `make web` 978,612 B (8 files). `make smoke`: 160 checks in 1,876 s, page errors 0, external requests 0; the WebAssembly eigenvalues equal the native ones within 1e-5; the pitch laboratory was driven with real clicks and taps at 1440x1000, 1024x768, 390x844 and 844x390: smallest text 14 px, smallest target 44 px, no horizontal overflow, the elevator step ends within 0.3 deg of the moment balance after 12 s (the rest is the phugoid), and at static margin -0.05 the glider departs at 9.28 s.
+
+Not verified: real phones and Safari, human first use of the pitch laboratory, and the model against a real aircraft (the pitch coefficients are plausible glider values, not measured ones).
+
 # Glide-made readout fix and retune (2026-11-11, issue #15)
 
 `launch()` passed the sink rate to `glide_step` with the wrong sign, so the glide-made needle started every hop at its cap (60) instead of the steady launch glide (26.8), and the LOW light could not come on for the first seconds. The bench pilot reads this needle; with the cap it dived off height at the start of each hop. With the needle right the pilot flies better, the two late punishments stopped costing time (buyer −0.1 %, doors −1.9 % against the 5 % the story test requires), and the Mill choice lost its trade-off. Six story numbers were therefore retuned by a search over 45 settings, each scored by the same conditions as `tests/test_ferry.c` (five passed; the one closest to the old numbers was taken).
