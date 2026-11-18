@@ -69,7 +69,7 @@ web: dist/physics.mjs
 	cp web/index.html web/style.css web/app.mjs web/pitch-lab.mjs dist/
 	mkdir -p dist/art
 	cp assets/art/* dist/art/
-	$(PYTHON) scripts/check-size.py
+	$(PYTHON) scripts/check_size.py
 
 dist/physics.mjs: src/flight.c src/observer.c src/flight.h src/observer.h src/ferry.c src/ferry.h src/ferry_web.c src/pitch.c src/pitch.h src/pitch_lab.c src/pitch_lab.h
 	mkdir -p dist
@@ -101,7 +101,7 @@ theory-figs: theory_figs
 
 # Fails when a statement of docs/theory has no figure, a link is broken, or a referenced function or test is gone.
 theory-check:
-	$(PYTHON) scripts/theory-check.py
+	$(PYTHON) scripts/theory_check.py
 
 clean:
 	rm -f lift-pilot test_flight test_pitch test_gif test_observer test_ferry story_bench
@@ -118,13 +118,13 @@ TM_UNIT_BINS := test_flight test_pitch test_gif test_observer test_ferry story_b
 
 .PHONY: test-unit check test-trace test-perf test-e2e tm-ctest tm-deps test-tm-unit test-tm-trace test-tm-perf test-tm-e2e
 test-unit:
-	$(TM_TEST_PYTHON) scripts/local-test.py unit
+	$(TM_TEST_PYTHON) scripts/local_test.py unit
 
 check:
-	$(TM_TEST_PYTHON) scripts/local-test.py all
+	$(TM_TEST_PYTHON) scripts/local_test.py all
 
 test-trace test-perf test-e2e:
-	$(TM_TEST_PYTHON) scripts/local-test.py $(@:test-%=%)
+	$(TM_TEST_PYTHON) scripts/local_test.py $(@:test-%=%)
 
 tm-ctest:
 	mkdir -p test-results
