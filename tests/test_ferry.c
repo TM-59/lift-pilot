@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const int DESIGN[FS_COUNT] = {FS_HANGAR, FS_WEIR,  FS_ORCHARD, FS_BUYER,
@@ -19,8 +20,9 @@ static int close_to(double a, double b) { return fabs(a - b) <= 1e-9 * fmax(1.0,
 /* Answer scenes with the given choices and put the glider on the strip at the end of each hop,
  * until `target` opens. Landing is done by hand (no flying) so the numbers the scenes set can be
  * read exactly. */
-static void reach(Ferry *f, int target, int route, int pulled)
+static void reach(Ferry *f, int target, Choices choices)
 {
+    int route = choices.route, pulled = choices.pulled;
     for (int guard = 0; f->scene != target; guard++) {
         assert(guard < 100 && f->hop < F_HOPS);
         if (f->scene != FS_NONE) {
@@ -32,7 +34,7 @@ static void reach(Ferry *f, int target, int route, int pulled)
         f->state.x = f->strip + 10.0;
         f->state.h = 0.001;
         f->state.gamma = -0.05;
-        ferry_tick(f, 1, 4.0, 0.0);
+        ferry_tick(f, (FerryInput){.frames = 1, .command_degrees = 4.0, .throttle = 0.0});
     }
 }
 
@@ -50,8 +52,10 @@ static char *slurp(const char *path)
 }
 
 /* Two-sided sign test; ties count in n (they are seeds where the effect did nothing). */
-static double sign_p(int k, int n)
+/* Two-sided sign test over the ablation seeds; ties count in n. */
+static double sign_p(int k)
 {
+    const int n = ABLATION_SEEDS;
     double tail = 0.0;
     for (int x = k; x <= n; x++) {
         double comb = 1.0;
@@ -63,12 +67,30 @@ static double sign_p(int k, int n)
     return fmin(1.0, 2.0 * tail / pow(2.0, n));
 }
 
+/* The two numbers of an ablation row that the checks read, in the order they are written. */
+enum RowField { ROW_SECONDS, ROW_LOW };
+
+/* The number after `"<field>": ` at or after `at`; asserts that the name and a number are there. */
+static double number_after(const char *at, enum RowField field)
+{
+    static const char *const HEAD[] = {"\"seconds\": ", "\"low\": "};
+    const char *head = HEAD[field];
+    const char *start = strstr(at, head);
+    assert(start);
+    char *end = NULL;
+    double value = strtod(start + strlen(head), &end);
+    assert(end != start + strlen(head));
+    return value;
+}
+
 /* Reads `count` rows of seconds/low after `head` (inside `from`). */
 static const char *read_rows(const char *at, double v[ABLATION_SEEDS][2])
 {
     for (int i = 0; i < ABLATION_SEEDS; i++) {
         at = strstr(at, "\"seconds\": ");
-        assert(at && sscanf(at, "\"seconds\": %lf, \"low\": %lf", &v[i][0], &v[i][1]) == 2);
+        assert(at);
+        v[i][0] = number_after(at, ROW_SECONDS);
+        v[i][1] = number_after(at, ROW_LOW);
         at++;
     }
     return at;
@@ -89,15 +111,27 @@ static int differs(double a[ABLATION_SEEDS][2], double b[ABLATION_SEEDS][2], int
     int k = hi > lo ? hi : lo;
     *k_out = k;
     double rel = fabs(sb - sa) / fmax(fabs(sa), ABLATION_SEEDS * 1.0);
-    if (sign_p(k, ABLATION_SEEDS) > 0.05 || rel < 0.05) {
+    if (sign_p(k) > 0.05 || rel < 0.05) {
         return 0;
     }
     return hi > lo ? 1 : -1;
 }
 
-static void read_pair(const char *text, const char *section, const char *name, const char *first,
-                      const char *second, double a[ABLATION_SEEDS][2], double b[ABLATION_SEEDS][2])
+/* Where one pair of row lists is in ablation.json: the section, the entry and the two heads. */
+typedef struct {
+    const char *section, *name, *first, *second;
+} PairPlace;
+
+/* The two row lists read by read_pair. */
+typedef struct {
+    double (*a)[2], (*b)[2];
+} PairRows;
+
+static void read_pair(const char *text, const PairPlace *place, PairRows rows)
 {
+    const char *section = place->section, *name = place->name, *first = place->first,
+               *second = place->second;
+    double (*a)[2] = rows.a, (*b)[2] = rows.b;
     char head[64];
     const char *at = strstr(text, section);
     assert(at);
@@ -124,8 +158,8 @@ int main(void)
         State s = f.state;
         for (int i = 0; i < 1500; i++) {
             double cmd = i < 600 ? 5.5 : 3.0, power = i < 300 ? 0.2 : 0.0;
-            ferry_tick(&f, 1, cmd, power);
-            flight_step(&a, &s, cmd * DEG, power, 0.02);
+            ferry_tick(&f, (FerryInput){.frames = 1, .command_degrees = cmd, .throttle = power});
+            flight_step(&a, &s, (FlightControl){.alpha_cmd = cmd * DEG, .throttle = power}, 0.02);
             assert(f.state.x == s.x && f.state.h == s.h && f.state.v == s.v &&
                    f.state.gamma == s.gamma);
         }
@@ -152,13 +186,13 @@ int main(void)
      * quietly. */
     {
         const char *text = slurp("docs/narrative/play-order.json");
-        char want[256] = "\"order\": [";
+        char want[256];
+        size_t used = (size_t)snprintf(want, sizeof want, "\"order\": [");
         for (int k = 0; k < FS_COUNT; k++) {
-            strcat(want, k ? ", \"" : "\"");
-            strcat(want, SCENE_ID[DESIGN[k]]);
-            strcat(want, "\"");
+            used += (size_t)snprintf(want + used, sizeof want - used, "%s\"%s\"", k ? ", " : "",
+                                     SCENE_ID[DESIGN[k]]);
         }
-        strcat(want, "], \"won\": true");
+        (void)snprintf(want + used, sizeof want - used, "], \"won\": true");
         int seeds = 0, orders = 0;
         for (const char *c = text; (c = strstr(c, "\"seed\": ")); c++) {
             seeds++;
@@ -201,9 +235,9 @@ int main(void)
         ferry_init(&a, FE_ALL);
         ferry_init(&b, FE_ALL);
         ferry_init(&c, FE_ALL & ~FE_ROUTE);
-        reach(&a, FS_WEIR, 0, 1);
-        reach(&b, FS_WEIR, 1, 1);
-        reach(&c, FS_WEIR, 1, 1);
+        reach(&a, FS_WEIR, (Choices){0, 1});
+        reach(&b, FS_WEIR, (Choices){1, 1});
+        reach(&c, FS_WEIR, (Choices){1, 1});
         assert(ferry_options(FS_WEIR) == 2 && !ferry_heavy(FS_WEIR) && a.banner == FB_CLEAR);
         assert(ferry_answer(&a, 0) == 0 && ferry_answer(&b, 1) == 0 && ferry_answer(&c, 1) == 0);
         assert(a.route == 0 && b.route == 1);
@@ -213,8 +247,8 @@ int main(void)
         /* The sinking air is applied to the height after each unchanged step. */
         Aircraft ac = glider_default();
         State s = a.state;
-        ferry_tick(&a, 1, 4.0, 0.0);
-        flight_step(&ac, &s, 4.0 * DEG, 0.0, 0.02);
+        ferry_tick(&a, (FerryInput){.frames = 1, .command_degrees = 4.0, .throttle = 0.0});
+        flight_step(&ac, &s, (FlightControl){.alpha_cmd = 4.0 * DEG, .throttle = 0.0}, 0.02);
         assert(close_to(a.state.h, s.h - 0.4 * 0.02) && a.state.x == s.x);
         puts("[mech] weir: quarry 2,500 m in air sinking 0.4 m/s; ridge 3,500 m from a climb-out "
              "15 m higher");
@@ -228,8 +262,8 @@ int main(void)
         Ferry a, b;
         ferry_init(&a, FE_ALL);
         ferry_init(&b, FE_ALL & ~FE_ORCHARD);
-        reach(&a, FS_ORCHARD, 1, 1);
-        reach(&b, FS_ORCHARD, 1, 1);
+        reach(&a, FS_ORCHARD, (Choices){1, 1});
+        reach(&b, FS_ORCHARD, (Choices){1, 1});
         assert(a.banner == FB_CLEAR && a.banner_left > 0.0 && !ferry_heavy(FS_ORCHARD));
         double ca = a.charge, cb = b.charge;
         int loud = a.loud;
@@ -238,7 +272,7 @@ int main(void)
         assert(a.scene == FS_BUYER && ferry_heavy(FS_BUYER) && a.banner == FB_NONE &&
                a.banner_left == 0.0);
         assert(ferry_answer(&a, 0) == 0);
-        ferry_tick(&a, 1, 4.0, 0.0);
+        ferry_tick(&a, (FerryInput){.frames = 1, .command_degrees = 4.0, .throttle = 0.0});
         assert(a.loud == loud && a.banner != FB_CLEAR);
         puts("[mech] orchard: +15 s of charge");
         puts("[quiet] buyer: shown with no strip-made banner, before or after");
@@ -250,19 +284,19 @@ int main(void)
         Ferry a, b;
         ferry_init(&a, FE_ALL);
         ferry_init(&b, FE_ALL & ~FE_WIND);
-        reach(&a, FS_MILL, 1, 1);
-        reach(&b, FS_MILL, 1, 1);
+        reach(&a, FS_MILL, (Choices){1, 1});
+        reach(&b, FS_MILL, (Choices){1, 1});
         assert(a.hop == 3 && b.hop == 3);
         assert(ferry_answer(&a, 1) == 0 && ferry_answer(&b, 1) == 0);
         assert(close_to(a.wind, -4.0) && b.wind == 0.0);
         Aircraft ac = glider_default();
         State s = a.state;
-        ferry_tick(&a, 1, 4.0, 0.0);
-        flight_step(&ac, &s, 4.0 * DEG, 0.0, 0.02);
+        ferry_tick(&a, (FerryInput){.frames = 1, .command_degrees = 4.0, .throttle = 0.0});
+        flight_step(&ac, &s, (FlightControl){.alpha_cmd = 4.0 * DEG, .throttle = 0.0}, 0.02);
         assert(close_to(a.state.x, s.x - 4.0 * 0.02));
         Ferry c;
         ferry_init(&c, FE_ALL);
-        reach(&c, FS_BUYER, 1, 1);
+        reach(&c, FS_BUYER, (Choices){1, 1});
         assert(ferry_answer(&c, 0) == 0 && c.hop == 2 && c.wind == 0.0);
         puts("[mech] buyer: valley wind 4 m/s on the nose for the last two hops");
     }
@@ -274,7 +308,7 @@ int main(void)
     for (int pulled = 0; pulled < 2; pulled++) {
         Ferry a;
         ferry_init(&a, FE_ALL);
-        reach(&a, FS_MILL, 1, pulled);
+        reach(&a, FS_MILL, (Choices){1, pulled});
         assert(ferry_options(FS_MILL) == 2 && ferry_heavy(FS_MILL) && a.banner == FB_NONE);
         int loud = a.loud;
         double charge = a.charge;
@@ -283,7 +317,7 @@ int main(void)
         assert(close_to(a.start_h, pulled ? 80.0 : 160.0) &&
                close_to(a.charge, pulled ? charge : 0.0));
         double v = a.state.v;
-        ferry_tick(&a, 1, 4.0, 1.0);
+        ferry_tick(&a, (FerryInput){.frames = 1, .command_degrees = 4.0, .throttle = 1.0});
         assert(a.loud == loud && a.banner != FB_CLEAR);
         assert(pulled ? a.throttle == 1.0 && a.state.v > v - 0.05 : a.throttle == 0.0);
     }
@@ -298,15 +332,15 @@ int main(void)
         Ferry a, b;
         ferry_init(&a, FE_ALL);
         ferry_init(&b, FE_ALL & ~FE_DOORS);
-        reach(&a, FS_DOORS, 1, 1);
-        reach(&b, FS_DOORS, 1, 1);
+        reach(&a, FS_DOORS, (Choices){1, 1});
+        reach(&b, FS_DOORS, (Choices){1, 1});
         assert(ferry_heavy(FS_DOORS) && a.banner == FB_NONE && b.banner == FB_NONE);
         int loud = a.loud;
         assert(ferry_answer(&a, 0) == 0 && ferry_answer(&b, 0) == 0);
         assert(a.hop == 4 && close_to(a.wind, -7.0) && close_to(a.lift, -0.25) &&
                a.length == 250.0);
         assert(close_to(b.wind, -4.0) && b.lift == 0.0 && b.length == 600.0);
-        ferry_tick(&a, 1, 4.0, 0.0);
+        ferry_tick(&a, (FerryInput){.frames = 1, .command_degrees = 4.0, .throttle = 0.0});
         assert(a.loud == loud && a.banner != FB_CLEAR);
         puts("[mech] doors: sea breeze 3 m/s more on the nose, air sinking 0.25 m/s, a 250 m yard");
         puts("[quiet] doors: shown with no strip-made banner");
@@ -323,18 +357,18 @@ int main(void)
         a.state.x = 1000.0;
         a.state.h = 0.001;
         a.state.gamma = -0.05;
-        ferry_tick(&a, 1, 4.0, 0.0);
+        ferry_tick(&a, (FerryInput){.frames = 1, .command_degrees = 4.0, .throttle = 0.0});
         assert(a.outlandings == 1 && a.out_hop[0] == 1 && a.hop == 0 && a.banner == FB_OUT);
         assert(a.state.x == 0.0 && a.state.h == 82.0 && close_to(a.charge, charge) &&
                a.crisis_hop[0]);
         a.state.x = 3200.0;
         a.state.h = 0.001;
         a.state.gamma = -0.05; /* past the strip end */
-        ferry_tick(&a, 1, 4.0, 0.0);
+        ferry_tick(&a, (FerryInput){.frames = 1, .command_degrees = 4.0, .throttle = 0.0});
         a.state.x = 2600.0;
         a.state.h = 0.001;
         a.state.gamma = -0.4; /* on the strip, too steep */
-        ferry_tick(&a, 1, 4.0, 0.0);
+        ferry_tick(&a, (FerryInput){.frames = 1, .command_degrees = 4.0, .throttle = 0.0});
         assert(a.outlandings == 3 && a.trailered == 1 && a.hop == 1 && a.scene == FS_WEIR &&
                a.loud == 0);
         puts("[mech] outlanding: short, long and hard landings re-fly the hop; the third ends it "
@@ -351,7 +385,12 @@ int main(void)
          * the red; the punishments, when taken away, make the flight quicker. */
         static const int want_m[] = {1, 1, 0, 0}, want_dir[] = {1, 1, -1, -1};
         for (int b = 0; b < 4; b++) {
-            read_pair(text, "\"beats\": {", beat[b], "\"on\": [", "\"off\": [", on, off);
+            read_pair(text,
+                      &(PairPlace){.section = "\"beats\": {",
+                                   .name = beat[b],
+                                   .first = "\"on\": [",
+                                   .second = "\"off\": ["},
+                      (PairRows){.a = on, .b = off});
             int k, d = differs(on, off, want_m[b], &k);
             printf("[mech] %s off - on, %s: %d/%d seeds one way\n", beat[b],
                    want_m[b] ? "low" : "seconds", k, ABLATION_SEEDS);
@@ -376,7 +415,12 @@ int main(void)
         static const char *const name[2] = {"weir", "mill"};
         for (int c = 0; c < 2; c++) {
             static double p0[ABLATION_SEEDS][2], p1[ABLATION_SEEDS][2];
-            read_pair(text, "\"choices\": {", name[c], "\"0\": [", "\"1\": [", p0, p1);
+            read_pair(text,
+                      &(PairPlace){.section = "\"choices\": {",
+                                   .name = name[c],
+                                   .first = "\"0\": [",
+                                   .second = "\"1\": ["},
+                      (PairRows){.a = p0, .b = p1});
             int ks, kl, ds = differs(p0, p1, 0, &ks), dl = differs(p0, p1, 1, &kl);
             /* path 1 against path 0: weir 1 (ridge) is slower and lower in the red; mill 1 (whole)
              * is quicker and longer in the red */
@@ -398,10 +442,10 @@ int main(void)
     {
         Ferry a;
         ferry_init(&a, FE_ALL);
-        reach(&a, FS_WEIR, 0, 0);
+        reach(&a, FS_WEIR, (Choices){0, 0});
         assert(a.banner == FB_CLEAR && a.loud == 1);
         assert(ferry_answer(&a, 2) == 1 && ferry_answer(&a, -1) == 1);
-        ferry_tick(&a, 1, 4.0, 0.0);
+        ferry_tick(&a, (FerryInput){.frames = 1, .command_degrees = 4.0, .throttle = 0.0});
         assert(a.scene == FS_WEIR);
         assert(ferry_ending(&a) == -1);
     }

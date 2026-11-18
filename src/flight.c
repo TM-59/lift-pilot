@@ -61,9 +61,9 @@ void trim_glide(const Aircraft *a, double alpha, State *s)
 
 double best_glide_ratio(const Aircraft *a) { return 1.0 / (2.0 * sqrt(a->cd0 * a->k)); }
 
-static void derivative(const Aircraft *a, const State *s, double alpha_cmd, double throttle,
-                       State *d)
+static void derivative(const Aircraft *a, const State *s, const FlightControl *c, State *d)
 {
+    double alpha_cmd = c->alpha_cmd, throttle = c->throttle;
     double l = lift_force(a, s), dr = drag_force(a, s);
     double thrust = throttle * a->max_thrust;
     d->x = s->v * cos(s->gamma);
@@ -80,16 +80,16 @@ static State advance(const State *s, const State *d, double dt)
     return n;
 }
 
-void flight_step(const Aircraft *a, State *s, double alpha_cmd, double throttle, double dt)
+void flight_step(const Aircraft *a, State *s, FlightControl c, double dt)
 {
     State k1, k2, k3, k4;
-    derivative(a, s, alpha_cmd, throttle, &k1);
+    derivative(a, s, &c, &k1);
     State s2 = advance(s, &k1, dt / 2.0);
-    derivative(a, &s2, alpha_cmd, throttle, &k2);
+    derivative(a, &s2, &c, &k2);
     State s3 = advance(s, &k2, dt / 2.0);
-    derivative(a, &s3, alpha_cmd, throttle, &k3);
+    derivative(a, &s3, &c, &k3);
     State s4 = advance(s, &k3, dt);
-    derivative(a, &s4, alpha_cmd, throttle, &k4);
+    derivative(a, &s4, &c, &k4);
     s->x += dt / 6.0 * (k1.x + 2 * k2.x + 2 * k3.x + k4.x);
     s->h += dt / 6.0 * (k1.h + 2 * k2.h + 2 * k3.h + k4.h);
     s->v += dt / 6.0 * (k1.v + 2 * k2.v + 2 * k3.v + k4.v);

@@ -33,18 +33,22 @@ enum {
 };
 
 /* Numeric story effects, one bit each, so the bench can remove them one by one. */
-enum {
-    FE_CELLS = 1u << 0,   /* Joost's spare cells: battery 5 -> 26 s of full throttle */
-    FE_ROUTE = 1u << 1,   /* quarry: strip at 2,500 m, air sinking 0.5 m/s; ridge: strip at 3,500 m,
-                             climb-out 15 m higher */
-    FE_ORCHARD = 1u << 2, /* Ros's solar panels: +15 s of charge */
-    FE_WIND = 1u << 3,    /* the valley wind gets up for the last two hops: 3 m/s on the nose */
-    FE_MOTOR = 1u << 4, /* pulling the motor: no throttle, a cleaner airframe (CD0 0.015 -> 0.014),
-                           a winch launch to 145 m */
-    FE_DOORS = 1u << 5, /* the last hop: the sea breeze (2 m/s more on the nose, air sinking 0.15
-                           m/s), a 250 m yard strip */
-    FE_ALL = (1u << 6) - 1u
-};
+/* Macros, not an enum: C enumerators are int, and the masks are combined with unsigned bit ops. */
+/* Joost's spare cells: battery 5 -> 26 s of full throttle */
+#define FE_CELLS (1U << 0U)
+/* quarry: strip at 2,500 m, air sinking 0.5 m/s; ridge: strip at 3,500 m, climb-out 15 m higher */
+#define FE_ROUTE (1U << 1U)
+/* Ros's solar panels: +15 s of charge */
+#define FE_ORCHARD (1U << 2U)
+/* the valley wind gets up for the last two hops: 3 m/s on the nose */
+#define FE_WIND (1U << 3U)
+/* pulling the motor: no throttle, a cleaner airframe (CD0 0.015 -> 0.014), a winch launch to 145 m
+ */
+#define FE_MOTOR (1U << 4U)
+/* the last hop: the sea breeze (2 m/s more on the nose, air sinking 0.15 m/s), a 250 m yard strip
+ */
+#define FE_DOORS (1U << 5U)
+#define FE_ALL ((1U << 6U) - 1U)
 
 enum { FB_NONE, FB_CLEAR, FB_OUT }; /* banner: none, "strip made", an outlanding */
 
@@ -128,7 +132,11 @@ enum FerryValue {
 void ferry_init(Ferry *f, unsigned effects);
 /* frames of one 0.02 s RK4 step each, under one command (degrees of angle of attack, throttle
  * 0..1). Does nothing while a scene is open or after the end. */
-void ferry_tick(Ferry *f, int frames, double command_degrees, double throttle);
+typedef struct {
+    int frames;
+    double command_degrees, throttle;
+} FerryInput;
+void ferry_tick(Ferry *f, FerryInput in);
 /* Close the open scene. Choice scenes take option 0 or 1; others take 0. Returns 0 when accepted.
  */
 int ferry_answer(Ferry *f, int option);

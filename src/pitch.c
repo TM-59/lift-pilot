@@ -46,9 +46,10 @@ void pitch_trim(const PitchAircraft *p, double alpha, PitchState *s)
     s->q = 0.0;
 }
 
-static void pitch_derivative(const PitchAircraft *p, const PitchState *s, double elevator,
-                             double throttle, PitchState *d)
+static void pitch_derivative(const PitchAircraft *p, const PitchState *s, const PitchControl *c,
+                             PitchState *d)
 {
+    double elevator = c->elevator, throttle = c->throttle;
     const Aircraft *a = &p->base;
     State point = {s->x, s->h, s->v, s->gamma, pitch_alpha(s)};
     double l = lift_force(a, &point), dr = drag_force(a, &point), thrust = throttle * a->max_thrust;
@@ -69,16 +70,16 @@ static PitchState pitch_advance(const PitchState *s, const PitchState *d, double
     return n;
 }
 
-void pitch_step(const PitchAircraft *p, PitchState *s, double elevator, double throttle, double dt)
+void pitch_step(const PitchAircraft *p, PitchState *s, PitchControl c, double dt)
 {
     PitchState k1, k2, k3, k4;
-    pitch_derivative(p, s, elevator, throttle, &k1);
+    pitch_derivative(p, s, &c, &k1);
     PitchState s2 = pitch_advance(s, &k1, dt / 2.0);
-    pitch_derivative(p, &s2, elevator, throttle, &k2);
+    pitch_derivative(p, &s2, &c, &k2);
     PitchState s3 = pitch_advance(s, &k2, dt / 2.0);
-    pitch_derivative(p, &s3, elevator, throttle, &k3);
+    pitch_derivative(p, &s3, &c, &k3);
     PitchState s4 = pitch_advance(s, &k3, dt);
-    pitch_derivative(p, &s4, elevator, throttle, &k4);
+    pitch_derivative(p, &s4, &c, &k4);
     s->x += dt / 6.0 * (k1.x + 2 * k2.x + 2 * k3.x + k4.x);
     s->h += dt / 6.0 * (k1.h + 2 * k2.h + 2 * k3.h + k4.h);
     s->v += dt / 6.0 * (k1.v + 2 * k2.v + 2 * k3.v + k4.v);
@@ -101,16 +102,17 @@ void pitch_jacobian(const PitchAircraft *p, const PitchState *trim, double eleva
         PitchState up = *trim, down = *trim, du, dd;
         *slot(&up, j) += eps;
         *slot(&down, j) -= eps;
-        pitch_derivative(p, &up, elevator, 0.0, &du);
-        pitch_derivative(p, &down, elevator, 0.0, &dd);
+        pitch_derivative(p, &up, &(PitchControl){.elevator = elevator, .throttle = 0.0}, &du);
+        pitch_derivative(p, &down, &(PitchControl){.elevator = elevator, .throttle = 0.0}, &dd);
         for (int i = 0; i < 4; i++) {
             a[i][j] = (*slot(&du, i) - *slot(&dd, i)) / (2.0 * eps);
         }
     }
 }
 
-void pitch_eigen(double a[4][4], double re[4], double im[4])
+void pitch_eigen(double a[4][4], EigenOut out)
 {
+    double *re = out.re, *im = out.im;
     /* Faddeev-LeVerrier: det(lambda I - A) = lambda^4 + c[1] lambda^3 + c[2] lambda^2 + c[3] lambda
      * + c[4]. */
     double m[4][4] = {{0}}, am[4][4], c[5] = {1.0, 0, 0, 0, 0};
@@ -192,13 +194,14 @@ static PitchMode mode_of(double re, double im)
     return m;
 }
 
-int pitch_modes(const PitchAircraft *p, double alpha, PitchMode *short_period, PitchMode *phugoid)
+int pitch_modes(const PitchAircraft *p, double alpha, PitchModesOut out)
 {
+    PitchMode *short_period = out.short_period, *phugoid = out.phugoid;
     PitchState s = {0.0, 1000.0, 0, 0, 0, 0};
     pitch_trim(p, alpha, &s);
     double a[4][4], re[4], im[4];
     pitch_jacobian(p, &s, pitch_trim_elevator(p, alpha), a);
-    pitch_eigen(a, re, im);
+    pitch_eigen(a, (EigenOut){.re = re, .im = im});
     *short_period = mode_of(re[0], im[0]);
     *phugoid = mode_of(re[2], im[2]);
     int both = im[0] != 0.0 && im[2] != 0.0 && fabs(im[0] + im[1]) < 1e-9 * (1.0 + fabs(im[0])) &&

@@ -22,11 +22,14 @@ static void test_best_glide_matches_the_polar(void)
 {
     Aircraft a = glider_default();
     double best = 0.0;
-    for (double al = deg(-2.0); al < a.alpha_stall; al += 0.0005) {
+    /* al is a value walked in fixed steps, not a loop counter. */
+    double al = deg(-2.0);
+    while (al < a.alpha_stall) {
         double r = lift_coeff(&a, al) / drag_coeff(&a, al);
         if (r > best) {
             best = r;
         }
+        al += 0.0005;
     }
     double expected = best_glide_ratio(&a);
     CHECK(fabs(best - expected) / expected < 0.01, "numeric best L/D %.2f vs analytic %.2f", best,
@@ -50,7 +53,7 @@ static void test_steady_glide_stays_steady(void)
     trim_glide(&a, deg(4.0), &s);
     double v0 = s.v, g0 = s.gamma;
     for (int k = 0; k < 1500; k++) {
-        flight_step(&a, &s, deg(4.0), 0.0, 0.02);
+        flight_step(&a, &s, (FlightControl){.alpha_cmd = deg(4.0), .throttle = 0.0}, 0.02);
     }
     CHECK(fabs(s.v - v0) / v0 < 0.002, "airspeed drifted %.4f -> %.4f", v0, s.v);
     CHECK(fabs(s.gamma - g0) < 0.002, "path angle drifted %.4f -> %.4f", g0, s.gamma);
@@ -67,7 +70,7 @@ static void test_energy_is_conserved_without_drag(void)
     State s = {0.0, 500.0, 30.0, 0.0, deg(5.0)};
     double e0 = specific_energy(&s);
     for (int k = 0; k < 1000; k++) {
-        flight_step(&a, &s, deg(5.0), 0.0, 0.02);
+        flight_step(&a, &s, (FlightControl){.alpha_cmd = deg(5.0), .throttle = 0.0}, 0.02);
     }
     CHECK(fabs(specific_energy(&s) - e0) / e0 < 1e-4, "energy %.3f -> %.3f", e0,
           specific_energy(&s));
@@ -82,7 +85,7 @@ static void test_phugoid_period_follows_lanchester(void)
     s.v *= 1.1;
     double dt = 0.02, prev = s.v, prev2 = s.v, t_min = -1.0, period = -1.0;
     for (int k = 1; k < 4000 && period < 0.0; k++) {
-        flight_step(&a, &s, deg(4.0), 0.0, dt);
+        flight_step(&a, &s, (FlightControl){.alpha_cmd = deg(4.0), .throttle = 0.0}, dt);
         double t = k * dt;
         if (t_min < 0.0 && prev < prev2 && prev < s.v) {
             t_min = t - dt;

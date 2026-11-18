@@ -43,7 +43,7 @@ static int headless(const char *dir)
             (void)fprintf(csv, "%.2f,%.1f,%.2f,%.3f,%.5f,%.5f\n", k * DT, s.x, s.h, s.v, s.gamma,
                           s.alpha);
         }
-        flight_step(&a, &s, deg(4.0), 0.0, DT);
+        flight_step(&a, &s, (FlightControl){.alpha_cmd = deg(4.0), .throttle = 0.0}, DT);
     }
     if (fclose(csv) != 0) {
         return 1;
@@ -104,14 +104,14 @@ static int pitch_chart(const char *path)
                target = pitch_trim_alpha(&p, elevator);
         for (int i = 0; i < N; i++) {
             if (i) {
-                pitch_step(&p, &s, elevator, 0.0, 0.016);
+                pitch_step(&p, &s, (PitchControl){.elevator = elevator, .throttle = 0.0}, 0.016);
             }
             t[i] = (float)(0.016 * i);
             al[m][i] = (float)(pitch_alpha(&s) * 180.0 / 3.14159265358979);
             steady[m][i] = (float)(target * 180.0 / 3.14159265358979);
         }
         PitchMode sp, ph;
-        pitch_modes(&p, deg(4.0), &sp, &ph);
+        pitch_modes(&p, deg(4.0), (PitchModesOut){.short_period = &sp, .phugoid = &ph});
         printf("static margin %.2f: short period %.3f rad/s, damping %.3f; steady alpha %.3f deg\n",
                margins[m], sp.wn, sp.zeta, target * 180.0 / 3.14159265358979);
     }
@@ -164,7 +164,7 @@ static int gif_demo(const char *path)
     State probe = s;
     Status st = FLYING;
     while (st == FLYING) {
-        flight_step(&a, &probe, deg(4.0), 0.0, DT);
+        flight_step(&a, &probe, (FlightControl){.alpha_cmd = deg(4.0), .throttle = 0.0}, DT);
         st = check_touchdown(&probe);
     }
     double runway_x = probe.x - 100.0;
@@ -187,7 +187,7 @@ static int gif_demo(const char *path)
                 return 1;
             }
         }
-        flight_step(&a, &s, deg(4.0), 0.0, DT);
+        flight_step(&a, &s, (FlightControl){.alpha_cmd = deg(4.0), .throttle = 0.0}, DT);
         st = check_touchdown(&s);
     }
     s.h = 0.0;
@@ -263,7 +263,7 @@ static int play(void)
         }
         if (!paused) {
             for (int k = 0; k < 2 && st == FLYING; k++) {
-                flight_step(&a, &s, cmd, throttle, DT);
+                flight_step(&a, &s, (FlightControl){.alpha_cmd = cmd, .throttle = throttle}, DT);
                 st = check_touchdown(&s);
             }
         }

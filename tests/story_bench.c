@@ -12,16 +12,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
-    uint64_t key;
-    unsigned effects;
-    int route, pulled;
-} Job;
+typedef RunPlan Job;
 
 static RunResult run_job(Job j)
 {
     RunResult r;
-    run_ferry(j.key, j.effects, j.route, j.pulled, &r);
+    run_ferry(&j, &r);
     return r;
 }
 
@@ -33,8 +29,8 @@ static const char *ending_id(int e)
 
 static void play_row(char *buf, size_t cap, int i, const RunResult *r)
 {
-    int route, pulled;
-    play_choices(i, &route, &pulled);
+    const Choices ch = play_choices(i);
+    int route = ch.route, pulled = ch.pulled;
     size_t n = (size_t)snprintf(
         buf, cap, "{\"seed\": \"%d\", \"choices\": {\"weir\": %d, \"mill\": %d}, \"order\": [", i,
         route, pulled);
@@ -63,8 +59,8 @@ static void ablation_row(char *buf, size_t cap, int i, const RunResult *r)
 
 static void tension_row(char *buf, size_t cap, int i, int run, const RunResult *r)
 {
-    int route, pulled;
-    tension_choices(run, &route, &pulled);
+    const Choices ch = tension_choices(run);
+    int route = ch.route, pulled = ch.pulled;
     size_t n = (size_t)snprintf(buf, cap,
                                 "{\"seed\": \"%d\", \"run\": %d, \"path\": {\"weir\": \"%d\", "
                                 "\"mill\": \"%d\"}, \"completed\": %s, \"crisis\": [",
@@ -93,19 +89,12 @@ static const int ARM_PULLED[ARMS] = {DEFAULT_PULLED, DEFAULT_PULLED, DEFAULT_PUL
 
 static Job ablation_job(int arm, int i)
 {
-    return (Job){ablation_key(i), ARM_EFFECTS[arm], ARM_ROUTE[arm], ARM_PULLED[arm]};
+    return (Job){ablation_key(i), ARM_EFFECTS[arm], {ARM_ROUTE[arm], ARM_PULLED[arm]}};
 }
-static Job play_job(int i)
-{
-    int r, t;
-    play_choices(i, &r, &t);
-    return (Job){play_key(i), FE_ALL, r, t};
-}
+static Job play_job(int i) { return (Job){play_key(i), FE_ALL, play_choices(i)}; }
 static Job tension_job(int i, int run)
 {
-    int r, t;
-    tension_choices(run, &r, &t);
-    return (Job){tension_key(i, run), FE_ALL, r, t};
+    return (Job){tension_key(i, run), FE_ALL, tension_choices(run)};
 }
 
 /* ------------------------------------------------------------------ full output */
@@ -167,7 +156,7 @@ static void summary(const RunResult *res, int np, int na, int nt);
 static int write_all(const char *dir)
 {
     int np = PLAY_SEEDS, na = ARMS * ABLATION_SEEDS, nt = TENSION_SEEDS * TENSION_RUNS;
-    RunResult *res = calloc((size_t)(np + na + nt), sizeof *res);
+    RunResult *res = calloc((size_t)np + (size_t)na + (size_t)nt, sizeof *res);
     if (!res) {
         return 1;
     }
@@ -275,8 +264,10 @@ static int write_all(const char *dir)
 
 /* ------------------------------------------------------------------ summary (printed by make
  * story) */
-static double sign_p2(int k, int n)
+/* Two-sided sign test over the ablation seeds. */
+static double sign_p2(int k)
 {
+    const int n = ABLATION_SEEDS;
     double tail = 0.0;
     for (int x = k; x <= n; x++) {
         double comb = 1.0;
@@ -288,8 +279,14 @@ static double sign_p2(int k, int n)
     return fmin(1.0, 2.0 * tail / pow(2.0, n));
 }
 
-static void compare(const char *name, const RunResult *a, const RunResult *b)
+/* The default arm and one ablation arm of the same seeds. */
+typedef struct {
+    const RunResult *base, *arm;
+} ArmPair;
+
+static void compare(const char *name, ArmPair pair)
 {
+    const RunResult *a = pair.base, *b = pair.arm;
     /* b - a per metric */
     for (int m = 0; m < 3; m++) {
         int hi = 0, lo = 0;
@@ -308,8 +305,7 @@ static void compare(const char *name, const RunResult *a, const RunResult *b)
             m == 0   ? "seconds"
             : m == 1 ? "low"
                      : "outlandings",
-            hi, lo, sa / ABLATION_SEEDS, sb / ABLATION_SEEDS,
-            sign_p2(hi > lo ? hi : lo, ABLATION_SEEDS),
+            hi, lo, sa / ABLATION_SEEDS, sb / ABLATION_SEEDS, sign_p2(hi > lo ? hi : lo),
             100.0 * (sb - sa) / fmax(sa, ABLATION_SEEDS));
     }
 }
@@ -321,7 +317,7 @@ static void summary(const RunResult *res, int np, int na, int nt)
     static const char *const arm[ARMS] = {"on",   "off",   "cells",  "orchard",
                                           "wind", "doors", "quarry", "pull"};
     for (int a = 1; a < ARMS; a++) {
-        compare(arm[a], ab, ab + a * ABLATION_SEEDS);
+        compare(arm[a], (ArmPair){.base = ab, .arm = ab + (size_t)a * ABLATION_SEEDS});
     }
     int nofail = 0, stuck = 0, crisis[F_HOPS] = {0}, fail[F_HOPS] = {0}, late = 0;
     for (int i = 0; i < nt; i++) {
@@ -384,18 +380,15 @@ static char *slurp(const char *dir, const char *name)
     return buf;
 }
 
-static int cmp_key(const void *a, const void *b)
-{
-    uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b;
-    return x < y ? -1 : x > y;
-}
-
 static int check(const char *dir)
 {
     int failures = 0;
     /* [seed] every pilot key in the bench is distinct (paired arms share a seed by design). */
     int nk = PLAY_SEEDS + ABLATION_SEEDS + TENSION_SEEDS * TENSION_RUNS, k = 0;
     uint64_t *keys = malloc(sizeof *keys * (size_t)nk);
+    if (!keys) {
+        return 1;
+    }
     for (int i = 0; i < PLAY_SEEDS; i++) {
         keys[k++] = play_key(i);
     }
@@ -407,9 +400,11 @@ static int check(const char *dir)
             keys[k++] = tension_key(i, r);
         }
     }
-    qsort(keys, (size_t)nk, sizeof *keys, cmp_key);
     for (int i = 1; i < nk; i++) {
-        if (keys[i] == keys[i - 1]) {
+        for (int j = 0; j < i; j++) {
+            if (keys[i] != keys[j]) {
+                continue;
+            }
             (void)fputs("[seed] duplicate run key\n", stderr);
             failures++;
         }

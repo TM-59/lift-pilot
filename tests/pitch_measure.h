@@ -29,7 +29,7 @@ static void pm_short_period_vector(const PitchAircraft *p, double complex v[4])
     double de, a[4][4], re[4], im[4];
     PitchState s = pm_trimmed(p, &de);
     pitch_jacobian(p, &s, de, a);
-    pitch_eigen(a, re, im);
+    pitch_eigen(a, (EigenOut){.re = re, .im = im});
     double complex lambda = re[0] + im[0] * I, m[3][4];
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
@@ -84,18 +84,24 @@ static PitchState pm_short_period_start(const PitchAircraft *p, double size, dou
  * started on the short-period eigenvector (0.01 rad/s): the time between the first two zero
  * crossings is half a damped period, the ratio of the first two (opposite) peaks is exp(-sigma pi /
  * wd). dt = 0.002 s, peaks by parabola. */
-static void pm_short_period_response(const PitchAircraft *p, double *wd, double *zeta, double *wn)
+/* Where pm_short_period_response writes its three measurements. */
+typedef struct {
+    double *wd, *zeta, *wn;
+} ResponseOut;
+
+static void pm_short_period_response(const PitchAircraft *p, ResponseOut out)
 {
+    double *wd = out.wd, *zeta = out.zeta, *wn = out.wn;
     double de, dt = 0.002;
     PitchState s = pm_short_period_start(p, 0.01, &de);
     double q0 = s.q, q1, q2 = 0.0, zc[2] = {0, 0}, pk[2] = {0, 0};
     int nz = 0, np = 0;
     q1 = q0;
-    pitch_step(p, &s, de, 0.0, dt);
+    pitch_step(p, &s, (PitchControl){.elevator = de, .throttle = 0.0}, dt);
     q2 = s.q;
     for (int k = 2; k < 5000 && (nz < 2 || np < 2); k++) {
         double qm = q1, qc = q2; /* q at steps k-2, k-1 */
-        pitch_step(p, &s, de, 0.0, dt);
+        pitch_step(p, &s, (PitchControl){.elevator = de, .throttle = 0.0}, dt);
         double qn = s.q;
         if (nz < 2 && qc != 0.0 && (qc > 0.0) != (qn > 0.0)) {
             zc[nz++] = (k - 1 + qc / (qc - qn)) * dt;
@@ -122,7 +128,7 @@ static double pm_growth_rate(const PitchAircraft *p, double t1, double t2)
     s.theta += 1e-5;
     int n1 = (int)(t1 / dt + 0.5), n2 = (int)(t2 / dt + 0.5);
     for (int k = 1; k <= n2; k++) {
-        pitch_step(p, &s, de, 0.0, dt);
+        pitch_step(p, &s, (PitchControl){.elevator = de, .throttle = 0.0}, dt);
         if (k == n1) {
             d1 = pitch_alpha(&s) - a0;
         }
@@ -142,7 +148,7 @@ static double pm_rk4_limit_measured(const PitchAircraft *p)
         s.q += 1e-7;
         double early = 0.0, late = 0.0; /* largest |dq| over steps 1000..1199 and 3000..3199 */
         for (int k = 0; k < 3200; k++) {
-            pitch_step(p, &s, de, 0.0, dt);
+            pitch_step(p, &s, (PitchControl){.elevator = de, .throttle = 0.0}, dt);
             double d = fabs(s.q - trim.q);
             if (!isfinite(d)) {
                 late = INFINITY;

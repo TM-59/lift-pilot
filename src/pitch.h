@@ -45,18 +45,30 @@ double pitch_trim_alpha(const PitchAircraft *p, double elevator);
 /* Steady unpowered glide trimmed by the elevator at alpha: fills v, gamma, theta, q = 0 (keeps x,
  * h). */
 void pitch_trim(const PitchAircraft *p, double alpha, PitchState *s);
-/* One RK4 step; elevator in rad, throttle in 0..1. */
-void pitch_step(const PitchAircraft *p, PitchState *s, double elevator, double throttle, double dt);
+/* The pilot's inputs: elevator [rad] and throttle 0..1. */
+typedef struct {
+    double elevator, throttle;
+} PitchControl;
+/* One RK4 step. */
+void pitch_step(const PitchAircraft *p, PitchState *s, PitchControl c, double dt);
 /* Jacobian of (v, gamma, theta, q) about a steady state, by central differences. */
 void pitch_jacobian(const PitchAircraft *p, const PitchState *trim, double elevator,
                     double a[4][4]);
 /* All four eigenvalues of a 4x4 matrix (characteristic polynomial, Durand-Kerner), sorted by
  * |lambda| descending. */
-void pitch_eigen(double a[4][4], double re[4], double im[4]);
+/* Where pitch_eigen writes the real and imaginary parts. */
+typedef struct {
+    double *re, *im;
+} EigenOut;
+void pitch_eigen(double a[4][4], EigenOut out);
 /* The short-period and phugoid modes of the glide trimmed at alpha: the two eigenvalue pairs, fast
  * pair first. Returns 1 when both pairs are complex (two oscillations), 0 otherwise (the modes are
  * then raw eigenvalues 0/1 and 2/3). */
-int pitch_modes(const PitchAircraft *p, double alpha, PitchMode *short_period, PitchMode *phugoid);
+/* Where pitch_modes writes the two modes. */
+typedef struct {
+    PitchMode *short_period, *phugoid;
+} PitchModesOut;
+int pitch_modes(const PitchAircraft *p, double alpha, PitchModesOut out);
 /* Short-period approximation at constant airspeed: w^2 = -M_alpha - Z M_q, 2 zeta w = Z - M_q with
  * Z = qbar S cl_alpha / (m V). */
 void pitch_short_period_approx(const PitchAircraft *p, double alpha, double *wn, double *zeta);

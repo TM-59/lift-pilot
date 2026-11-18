@@ -24,7 +24,7 @@ static void test_eigen_solver_on_a_known_matrix(void)
     /* Block diagonal: eigenvalues -1 +- 2i, 3 and -0.5. */
     double a[4][4] = {{-1, 2, 0, 0}, {-2, -1, 0, 0}, {0, 0, 3, 0}, {0, 0, 0, -0.5}};
     double re[4], im[4];
-    pitch_eigen(a, re, im);
+    pitch_eigen(a, (EigenOut){.re = re, .im = im});
     /* sorted by modulus: 3, then the pair (modulus sqrt 5) with the positive imaginary part first,
      * then -0.5 */
     CHECK(fabs(re[0] - 3.0) < 1e-10 && im[0] == 0.0, "real root 3: %g%+gi", re[0], im[0]);
@@ -42,7 +42,7 @@ static void test_trim_is_an_equilibrium(void)
           pitch_moment_coeff(&p, PM_ALPHA, 0.0, de));
     CHECK(fabs(pitch_trim_alpha(&p, de) - PM_ALPHA) < 1e-14, "trim alpha round trip");
     for (int k = 0; k < 1500; k++) {
-        pitch_step(&p, &s, de, 0.0, 0.02);
+        pitch_step(&p, &s, (PitchControl){.elevator = de, .throttle = 0.0}, 0.02);
     }
     CHECK(fabs(s.v - s0.v) < 1e-9 && fabs(s.gamma - s0.gamma) < 1e-12 && fabs(s.q) < 1e-12 &&
               fabs(pitch_alpha(&s) - PM_ALPHA) < 1e-12,
@@ -56,7 +56,7 @@ static void test_energy_is_conserved_without_drag(void)
     PitchState s = {0.0, 500.0, 30.0, 0.0, 5.0 * PM_DEG, 0.2};
     double e0 = 0.5 * s.v * s.v + GRAVITY * s.h;
     for (int k = 0; k < 1000; k++) {
-        pitch_step(&p, &s, 0.0, 0.0, 0.02);
+        pitch_step(&p, &s, (PitchControl){.elevator = 0.0, .throttle = 0.0}, 0.02);
     }
     double e = 0.5 * s.v * s.v + GRAVITY * s.h;
     CHECK(fabs(e / e0 - 1.0) < 1e-6, "energy %g -> %g", e0, e);
@@ -69,7 +69,8 @@ static void test_two_modes_and_the_short_period_approximation(void)
         PitchAircraft p = pitch_default();
         p.static_margin = margins[i];
         PitchMode sp, ph;
-        CHECK(pitch_modes(&p, PM_ALPHA, &sp, &ph), "SM %.2f: two oscillatory modes", margins[i]);
+        CHECK(pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph}),
+              "SM %.2f: two oscillatory modes", margins[i]);
         CHECK(sp.wn > 5.0 * ph.wn, "SM %.2f: modes separate (%g vs %g rad/s)", margins[i], sp.wn,
               ph.wn);
         double wn, zeta;
@@ -89,7 +90,7 @@ static void test_phugoid_without_pitch_damping_is_lanchester(void)
     PitchAircraft p = pitch_default();
     p.cm_q = 0.0;
     PitchMode sp, ph;
-    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
     double de;
     PitchState s = pm_trimmed(&p, &de);
     double lanchester = PM_PI * sqrt(2.0) * s.v / GRAVITY;
@@ -104,9 +105,9 @@ static void test_response_matches_the_eigenvalue(void)
         PitchAircraft p = pitch_default();
         p.static_margin = margins[i];
         PitchMode sp, ph;
-        pitch_modes(&p, PM_ALPHA, &sp, &ph);
+        pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
         double wd, zeta, wn;
-        pm_short_period_response(&p, &wd, &zeta, &wn);
+        pm_short_period_response(&p, (ResponseOut){.wd = &wd, .zeta = &zeta, .wn = &wn});
         CHECK(rel(wd, sp.im) < 0.02, "SM %.2f: measured wd %.4f vs eigenvalue %.4f", margins[i], wd,
               sp.im);
         CHECK(rel(zeta, sp.zeta) < 0.05, "SM %.2f: measured zeta %.4f vs eigenvalue %.4f",
@@ -124,7 +125,7 @@ static void test_elevator_step_settles_at_the_moment_balance(void)
     CHECK(fabs(expected - PM_ALPHA - p.cm_de * PM_DEG / pitch_cm_alpha(&p)) < 1e-12,
           "trim alpha is linear in the elevator");
     for (int k = 0; k < 150000; k++) {
-        pitch_step(&p, &s, step, 0.0, 0.02);
+        pitch_step(&p, &s, (PitchControl){.elevator = step, .throttle = 0.0}, 0.02);
     }
     CHECK(fabs(pitch_alpha(&s) - expected) < 1e-6, "alpha after 3000 s %.7f vs %.7f",
           pitch_alpha(&s), expected);
@@ -139,7 +140,7 @@ static void test_negative_static_margin_diverges(void)
     PitchState s = pm_trimmed(&p, &de);
     double a[4][4], re[4], im[4], lambda = -1.0;
     pitch_jacobian(&p, &s, de, a);
-    pitch_eigen(a, re, im);
+    pitch_eigen(a, (EigenOut){.re = re, .im = im});
     for (int i = 0; i < 4; i++) {
         if (im[i] == 0.0 && re[i] > lambda) {
             lambda = re[i];
@@ -152,7 +153,7 @@ static void test_negative_static_margin_diverges(void)
     p.static_margin = 0.15;
     s = pm_trimmed(&p, &de);
     pitch_jacobian(&p, &s, de, a);
-    pitch_eigen(a, re, im);
+    pitch_eigen(a, (EigenOut){.re = re, .im = im});
     for (int i = 0; i < 4; i++) {
         CHECK(re[i] < 0.0, "SM 0.15 eigenvalue %d has real part %g", i, re[i]);
     }
@@ -162,7 +163,7 @@ static void test_rk4_stability_limit(void)
 {
     PitchAircraft p = pitch_default();
     PitchMode sp, ph;
-    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
     double theory = pm_rk4_limit_theory(&sp), measured = pm_rk4_limit_measured(&p);
     CHECK(rel(measured, theory) < 0.01, "RK4 limit measured %.4f s vs |R(lambda dt)| = 1 at %.4f s",
           measured, theory);

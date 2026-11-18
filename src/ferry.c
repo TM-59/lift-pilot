@@ -192,8 +192,10 @@ static void outland(Ferry *f)
     launch(f);
 }
 
-void ferry_tick(Ferry *f, int frames, double command_degrees, double throttle)
+void ferry_tick(Ferry *f, FerryInput in)
 {
+    int frames = in.frames;
+    double command_degrees = in.command_degrees, throttle = in.throttle;
     if (frames < 0 || f->scene != FS_NONE || f->hop >= F_HOPS) {
         return;
     }
@@ -213,7 +215,8 @@ void ferry_tick(Ferry *f, int frames, double command_degrees, double throttle)
         double x0 = f->state.x, e0 = energy_height(&f->state);
         f->command = cmd;
         f->throttle = power;
-        flight_step(&f->aircraft, &f->state, cmd, power, F_DT);
+        flight_step(&f->aircraft, &f->state, (FlightControl){.alpha_cmd = cmd, .throttle = power},
+                    F_DT);
         /* The air mass moves: a uniform wind and vertical air motion carry the glider with it. */
         f->state.x += f->wind * F_DT;
         f->state.h += f->lift * F_DT;
@@ -223,8 +226,11 @@ void ferry_tick(Ferry *f, int frames, double command_degrees, double throttle)
         f->time += F_DT;
         f->hop_time += F_DT;
         f->frames++;
-        if (f->banner_left > 0.0 && (f->banner_left -= F_DT) <= 0.0) {
-            f->banner = FB_NONE;
+        if (f->banner_left > 0.0) {
+            f->banner_left -= F_DT;
+            if (f->banner_left <= 0.0) {
+                f->banner = FB_NONE;
+            }
         }
         if (ferry_low_on(f)) {
             f->low += F_DT;

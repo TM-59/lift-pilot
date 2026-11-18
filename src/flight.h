@@ -30,8 +30,12 @@ double drag_force(const Aircraft *a, const State *s);
 void trim_glide(const Aircraft *a, double alpha, State *s);
 /* Best lift-to-drag ratio from the polar: 1 / (2 sqrt(cd0 k)). */
 double best_glide_ratio(const Aircraft *a);
-/* One RK4 step; alpha_cmd in rad, throttle in 0..1. */
-void flight_step(const Aircraft *a, State *s, double alpha_cmd, double throttle, double dt);
+/* The pilot's inputs: commanded angle of attack [rad] and throttle 0..1. */
+typedef struct {
+    double alpha_cmd, throttle;
+} FlightControl;
+/* One RK4 step. */
+void flight_step(const Aircraft *a, State *s, FlightControl c, double dt);
 /* Ground contact test after a step: touchdown is gentle if the sink rate and path angle are small.
  */
 Status check_touchdown(State *s);

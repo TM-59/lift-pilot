@@ -59,7 +59,7 @@ int main(int argc, char **argv)
         double power = i < 500 ? 0.1 : 0.0;
         lp_controls(cmd, power);
         lp_step(1);
-        flight_step(&a, &direct, cmd * deg, power, 0.02);
+        flight_step(&a, &direct, (FlightControl){.alpha_cmd = cmd * deg, .throttle = power}, 0.02);
         CHECK(fabs(lp_value(LP_X) - direct.x) < 1e-9);
         CHECK(fabs(lp_value(LP_H) - direct.h) < 1e-9);
         CHECK(fabs(lp_value(LP_V) - direct.v) < 1e-9);

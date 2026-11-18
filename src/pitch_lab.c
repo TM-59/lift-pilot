@@ -24,8 +24,9 @@ void pl_reset(double static_margin)
     departed = 0;
     double a[4][4];
     pitch_jacobian(&craft, &state, trim_elevator, a);
-    pitch_eigen(a, eig_re, eig_im);
-    oscillatory = pitch_modes(&craft, 4.0 * DEG, &sp, &ph);
+    pitch_eigen(a, (EigenOut){.re = eig_re, .im = eig_im});
+    oscillatory =
+        pitch_modes(&craft, 4.0 * DEG, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
     pitch_short_period_approx(&craft, 4.0 * DEG, &approx_wn, &approx_zeta);
 }
 
@@ -52,7 +53,8 @@ void pl_step(int frames)
         frames = 250;
     }
     for (int i = 0; i < frames && !departed; i++) {
-        pitch_step(&craft, &state, trim_elevator + offset, 0.0, DT);
+        pitch_step(&craft, &state,
+                   (PitchControl){.elevator = trim_elevator + offset, .throttle = 0.0}, DT);
         elapsed += DT;
         double alpha = pitch_alpha(&state);
         if (!(fabs(alpha) <= 25.0 * DEG && state.v >= 8.0 && state.v <= 80.0)) {

@@ -26,7 +26,8 @@ void lp_reset(int next_mode)
     State probe = {0.0, 100.0, 0.0, 0.0, 0.0};
     trim_glide(&aircraft, 4.0 * DEG, &probe);
     for (int i = 0; i < 30000 && check_touchdown(&probe) == FLYING; i++) {
-        flight_step(&aircraft, &probe, 4.0 * DEG, 0.0, DT);
+        flight_step(&aircraft, &probe, (FlightControl){.alpha_cmd = 4.0 * DEG, .throttle = 0.0},
+                    DT);
     }
     runway = probe.x - 100.0;
 }
@@ -49,7 +50,8 @@ void lp_step(int frames)
         frames = 250;
     }
     for (int i = 0; i < frames && status == FLYING; i++) {
-        flight_step(&aircraft, &state, command, power, DT);
+        flight_step(&aircraft, &state, (FlightControl){.alpha_cmd = command, .throttle = power},
+                    DT);
         elapsed += DT;
         status = check_touchdown(&state);
     }

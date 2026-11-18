@@ -120,7 +120,9 @@ static void fig_speed_polar(void)
     Aircraft a = glider_default();
     int n = 0;
     double min_sink = 1e9, min_sink_v = 0.0;
-    for (double deg = 14.8; deg >= -1.0; deg -= 0.2) {
+    /* deg is a value walked in fixed steps, not a loop counter. */
+    double deg = 14.8;
+    while (deg >= -1.0) {
         State s = {0};
         trim_glide(&a, deg * DEG, &s);
         double sink = -s.v * sin(s.gamma);
@@ -131,6 +133,7 @@ static void fig_speed_polar(void)
             min_sink_v = s.v;
         }
         n++;
+        deg -= 0.2;
     }
     State s = {0};
     trim_glide(&a, 4.0 * DEG, &s);
@@ -162,8 +165,9 @@ static void fig_energy(void)
     for (int i = 0; i < n; i++) {
         if (i) {
             for (int k = 0; k < 10; k++) {
-                flight_step(&a, &s, 4.0 * DEG, 0.0, 0.02);
-                flight_step(&clean, &c, 5.0 * DEG, 0.0, 0.02);
+                flight_step(&a, &s, (FlightControl){.alpha_cmd = 4.0 * DEG, .throttle = 0.0}, 0.02);
+                flight_step(&clean, &c, (FlightControl){.alpha_cmd = 5.0 * DEG, .throttle = 0.0},
+                            0.02);
             }
         }
         xs[i] = (float)(0.2 * i);
@@ -199,7 +203,7 @@ static void fig_phugoid(void)
     for (int i = 0; i < n; i++) {
         if (i) {
             for (int k = 0; k < 10; k++) {
-                flight_step(&a, &s, 4.0 * DEG, 0.0, 0.02);
+                flight_step(&a, &s, (FlightControl){.alpha_cmd = 4.0 * DEG, .throttle = 0.0}, 0.02);
                 double t = 0.2 * (i - 1) + 0.02 * (k + 1);
                 if (t_min < 0.0 && prev < prev2 && prev < s.v) {
                     t_min = t - 0.02;
@@ -234,7 +238,7 @@ static void fig_lag(void)
     double at_tau = 0.0;
     for (int i = 0; i < n; i++) {
         if (i) {
-            flight_step(&a, &s, 8.0 * DEG, 0.0, 0.02);
+            flight_step(&a, &s, (FlightControl){.alpha_cmd = 8.0 * DEG, .throttle = 0.0}, 0.02);
         }
         double t = 0.02 * i;
         xs[i] = (float)t;
@@ -261,7 +265,7 @@ static State after_20s(double dt)
     s.v *= 1.1;
     int steps = (int)(20.0 / dt + 0.5);
     for (int k = 0; k < steps; k++) {
-        flight_step(&a, &s, 4.0 * DEG, 0.0, dt);
+        flight_step(&a, &s, (FlightControl){.alpha_cmd = 4.0 * DEG, .throttle = 0.0}, dt);
     }
     return s;
 }
@@ -320,8 +324,14 @@ static void fig_touchdown(void)
 
 /* Ground distance of a 4 degree glide from the first hop's start height down to 1 m, in a given air
  * mass. */
-static double ferry_glide(double wind, double lift, float *trace, int *count)
+/* Air moving along the path (wind, + on the tail) and up (lift) [m/s]. */
+typedef struct {
+    double wind, lift;
+} Air;
+
+static double ferry_glide(Air air, float *trace, int *count)
 {
+    double wind = air.wind, lift = air.lift;
     Ferry f;
     ferry_init(&f, FE_ALL);
     ferry_answer(&f, 0);
@@ -333,7 +343,7 @@ static double ferry_glide(double wind, double lift, float *trace, int *count)
             xs[n] = (float)ferry_value(&f, FV_X);
             trace[n] = (float)ferry_value(&f, FV_H);
         }
-        ferry_tick(&f, 10, 4.0, 0.0);
+        ferry_tick(&f, (FerryInput){.frames = 10, .command_degrees = 4.0, .throttle = 0.0});
         n++;
     }
     if (count) {
@@ -351,11 +361,12 @@ static void fig_air(void)
     double vx = s.v * cos(s.gamma), sink = -s.v * sin(s.gamma), drop = 82.0 - 1.0;
     int n = 0, m = 0;
     static float still[MAXN];
-    double d0 = ferry_glide(0.0, 0.0, still, &n);
+    double d0 = ferry_glide((Air){.wind = 0.0, .lift = 0.0}, still, &n);
     for (int i = 0; i < n; i++) {
         ya[i] = still[i];
     }
-    double d1 = ferry_glide(-3.0, 0.0, NULL, NULL), d2 = ferry_glide(0.0, -0.5, NULL, NULL);
+    double d1 = ferry_glide((Air){.wind = -3.0, .lift = 0.0}, NULL, NULL),
+           d2 = ferry_glide((Air){.wind = 0.0, .lift = -0.5}, NULL, NULL);
     /* headwind and sink traces on the same x grid as the still-air run: h(x) is a straight line in
      * each case */
     for (int i = 0; i < n; i++) {
@@ -390,7 +401,7 @@ static void fig_gauges(void)
         xs[n] = (float)(0.2 * n);
         ya[n] = (float)ferry_value(&f, FV_CHARGE);
         yb[n] = (float)ferry_value(&f, FV_THROTTLE) * 10.0f;
-        ferry_tick(&f, 10, 4.0, 1.0);
+        ferry_tick(&f, (FerryInput){.frames = 10, .command_degrees = 4.0, .throttle = 1.0});
     }
     value("battery-start", "battery after the hangar scene, s of full throttle (theory 26)", c0,
           26.0);
@@ -422,9 +433,12 @@ static void fig_gauges(void)
         ya[n] = (float)fmin(ferry_need(&g), 60.0);
         yb[n] = (float)ferry_value(&g, FV_MAKING);
         yc[n] = 26.0f;
-        ferry_tick(&g, 25, 4.0,
-                   ferry_value(&g, FV_X) < 700.0 ? 1.0
-                                                 : 0.0); /* motor for the first 700 m, then glide */
+        ferry_tick(&g,
+                   (FerryInput){.frames = 25,
+                                .command_degrees = 4.0,
+                                .throttle = ferry_value(&g, FV_X) < 700.0
+                                                ? 1.0
+                                                : 0.0}); /* motor for the first 700 m, then glide */
         n++;
     }
     Series q[] = {{"glide needed", ya, "#d62728"},
@@ -491,8 +505,8 @@ static void fig_pitch_trim(void)
     for (int i = 0; i < n; i++) {
         if (i) {
             for (int k = 0; k < 10; k++) {
-                pitch_step(&p, &s, de, 0.0, 0.02);
-                pitch_step(&clean, &c, 0.0, 0.0, 0.02);
+                pitch_step(&p, &s, (PitchControl){.elevator = de, .throttle = 0.0}, 0.02);
+                pitch_step(&clean, &c, (PitchControl){.elevator = 0.0, .throttle = 0.0}, 0.02);
             }
         }
         double e = 0.5 * c.v * c.v + GRAVITY * c.h;
@@ -585,7 +599,7 @@ static void fig_root_locus(void)
             double de, a[4][4], re[4], im[4];
             PitchState s = pm_trimmed(&p, &de);
             pitch_jacobian(&p, &s, de, a);
-            pitch_eigen(a, re, im);
+            pitch_eigen(a, (EigenOut){.re = re, .im = im});
             int red = (int)(214 - 183 * i / 80.0), green = (int)(39 + 80 * i / 80.0),
                 blue = (int)(40 + 140 * i / 80.0);
             for (int j = 0; j < 4; j++) {
@@ -611,7 +625,7 @@ static void fig_root_locus(void)
     }
     PitchAircraft p = pitch_default();
     PitchMode sp, ph;
-    int two = pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    int two = pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
     value("modes-oscillatory", "two complex pairs at SM 0.15 (1 = yes)", two, 1.0);
     value("sp-eig-re", "short-period eigenvalue, real part, 1/s (reported)", sp.re, sp.re);
     value("sp-eig-im", "short-period eigenvalue, imaginary part, rad/s (reported)", sp.im, sp.im);
@@ -620,7 +634,7 @@ static void fig_root_locus(void)
     value("mode-separation", "short-period over phugoid natural frequency at SM 0.15 (reported)",
           sp.wn / ph.wn, sp.wn / ph.wn);
     double a[4][4] = {{-1, 2, 0, 0}, {-2, -1, 0, 0}, {0, 0, 3, 0}, {0, 0, 0, -0.5}}, re[4], im[4];
-    pitch_eigen(a, re, im);
+    pitch_eigen(a, (EigenOut){.re = re, .im = im});
     value("eigen-check",
           "eigenvalue solver on a known matrix: imaginary part of the pair (theory 2)", im[1], 2.0);
 }
@@ -630,38 +644,46 @@ static void fig_root_locus(void)
 static void fig_short_period(void)
 {
     int n = 0;
-    for (double sm = 0.03; sm <= 0.3001; sm += 0.005, n++) {
+    /* sm is a value walked in fixed steps, not a loop counter. */
+    double sm = 0.03;
+    while (sm <= 0.3001) {
         PitchAircraft p = pitch_default();
         p.static_margin = sm;
         PitchMode sp, ph;
-        pitch_modes(&p, PM_ALPHA, &sp, &ph);
+        pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
         double wn, zeta;
         pitch_short_period_approx(&p, PM_ALPHA, &wn, &zeta);
         xs[n] = (float)sm;
         ya[n] = (float)sp.wn;
         yb[n] = (float)wn;
+        sm += 0.005;
+        n++;
     }
     Series w[] = {{"eigenvalue", ya, "#1f77b4"}, {"approximation", yb, "#d62728"}};
     plot("short-period-frequency.svg", "Short-period natural frequency", "static margin",
          "wn [rad/s]", n, w, 2);
     n = 0;
-    for (double sm = 0.03; sm <= 0.3001; sm += 0.005, n++) {
+    /* sm is a value walked in fixed steps, not a loop counter. */
+    sm = 0.03;
+    while (sm <= 0.3001) {
         PitchAircraft p = pitch_default();
         p.static_margin = sm;
         PitchMode sp, ph;
-        pitch_modes(&p, PM_ALPHA, &sp, &ph);
+        pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
         double wn, zeta;
         pitch_short_period_approx(&p, PM_ALPHA, &wn, &zeta);
         xs[n] = (float)sm;
         ya[n] = (float)sp.zeta;
         yb[n] = (float)zeta;
+        sm += 0.005;
+        n++;
     }
     Series z[] = {{"eigenvalue", ya, "#1f77b4"}, {"approximation", yb, "#d62728"}};
     plot("short-period-damping.svg", "Short-period damping ratio", "static margin", "zeta", n, z,
          2);
     PitchAircraft p = pitch_default();
     PitchMode sp, ph;
-    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
     double wn, zeta;
     pitch_short_period_approx(&p, PM_ALPHA, &wn, &zeta);
     value("sp-wn",
@@ -672,7 +694,7 @@ static void fig_short_period(void)
           "short-period damping ratio at SM 0.15 from the eigenvalue (theory: the approximation)",
           sp.zeta, zeta);
     p.static_margin = 0.05;
-    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
     pitch_short_period_approx(&p, PM_ALPHA, &wn, &zeta);
     value("sp-wn-0.05", "the same at SM 0.05, rad/s (theory: the approximation)", sp.wn, wn);
 }
@@ -683,11 +705,13 @@ static void fig_pitch_phugoid(void)
 {
     int n = 0;
     double lanchester = 0.0;
-    for (double sm = 0.03; sm <= 0.3001; sm += 0.005, n++) {
+    /* sm is a value walked in fixed steps, not a loop counter. */
+    double sm = 0.03;
+    while (sm <= 0.3001) {
         PitchAircraft p = pitch_default();
         p.static_margin = sm;
         PitchMode sp, ph;
-        pitch_modes(&p, PM_ALPHA, &sp, &ph);
+        pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
         double de;
         PitchState s = pm_trimmed(&p, &de);
         lanchester = PM_PI * sqrt(2.0) * s.v / GRAVITY;
@@ -695,16 +719,18 @@ static void fig_pitch_phugoid(void)
         ya[n] = (float)ph.period;
         yb[n] = (float)pitch_phugoid_theory(&p, PM_ALPHA);
         yc[n] = (float)lanchester;
+        sm += 0.005;
+        n++;
     }
     PitchAircraft p = pitch_default();
     PitchMode sp, ph;
-    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
     value("ph-period",
           "phugoid period of the rigid body at SM 0.15 from the eigenvalue, s (theory: Lanchester "
           "with pitch damping)",
           ph.period, pitch_phugoid_theory(&p, PM_ALPHA));
     p.cm_q = 0.0;
-    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
     value("ph-period-no-damping", "the same with Cmq = 0, s (theory: Lanchester pi sqrt(2) V / g)",
           ph.period, lanchester);
     Series s[] = {{"eigenvalue", ya, "#1f77b4"},
@@ -720,7 +746,7 @@ static void fig_sp_response(void)
 {
     PitchAircraft p = pitch_default();
     PitchMode sp, ph;
-    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
     double de;
     PitchState s = pm_short_period_start(&p, 0.01, &de);
     double amp = 0.01; /* the start is 0.01 x Re(v) with v_q = 1: q(t) = 0.01 exp(re t) cos(im t) */
@@ -728,7 +754,7 @@ static void fig_sp_response(void)
     for (int i = 0; i < n; i++) {
         if (i) {
             for (int k = 0; k < 5; k++) {
-                pitch_step(&p, &s, de, 0.0, 0.002);
+                pitch_step(&p, &s, (PitchControl){.elevator = de, .throttle = 0.0}, 0.002);
             }
         }
         double t = 0.01 * i;
@@ -738,7 +764,7 @@ static void fig_sp_response(void)
         yc[i] = -yb[i];
     }
     double wd, zeta, wn;
-    pm_short_period_response(&p, &wd, &zeta, &wn);
+    pm_short_period_response(&p, (ResponseOut){.wd = &wd, .zeta = &zeta, .wn = &wn});
     value("sp-measured-wd",
           "damped frequency from the zero crossings of the simulated pitch rate, rad/s (theory: "
           "imaginary part of the eigenvalue)",
@@ -765,7 +791,7 @@ static void fig_elevator_step(void)
     for (int i = 0; i < n; i++) {
         if (i) {
             for (int k = 0; k < 5; k++) {
-                pitch_step(&p, &s, step, 0.0, 0.02);
+                pitch_step(&p, &s, (PitchControl){.elevator = step, .throttle = 0.0}, 0.02);
             }
         }
         xs[i] = (float)(0.1 * i);
@@ -774,7 +800,7 @@ static void fig_elevator_step(void)
         yc[i] = (float)(s.v / 5.0);
     }
     for (int k = 0; k < 150000 - 20000; k++) {
-        pitch_step(&p, &s, step, 0.0, 0.02);
+        pitch_step(&p, &s, (PitchControl){.elevator = step, .throttle = 0.0}, 0.02);
     }
     value("step-alpha",
           "angle of attack 3000 s after a 1 deg nose-up step, deg (theory -(Cm0 + Cmde de) / "
@@ -799,7 +825,7 @@ static void fig_divergence(void)
     double de, a[4][4], re[4], im[4], lambda = -1.0;
     PitchState s = pm_trimmed(&p, &de);
     pitch_jacobian(&p, &s, de, a);
-    pitch_eigen(a, re, im);
+    pitch_eigen(a, (EigenOut){.re = re, .im = im});
     for (int i = 0; i < 4; i++) {
         if (im[i] == 0.0 && re[i] > lambda) {
             lambda = re[i];
@@ -812,7 +838,7 @@ static void fig_divergence(void)
     for (int i = 0; i < n; i++) {
         if (i) {
             for (int k = 0; k < 50; k++) {
-                pitch_step(&p, &s, de, 0.0, 0.002);
+                pitch_step(&p, &s, (PitchControl){.elevator = de, .throttle = 0.0}, 0.002);
             }
         }
         double t = 0.1 * i, d = fabs(pitch_alpha(&s) - a0);
@@ -837,7 +863,7 @@ static void fig_divergence(void)
         PitchState t = pm_trimmed(&q, &de);
         double b[4][4], r[4], m[4];
         pitch_jacobian(&q, &t, de, b);
-        pitch_eigen(b, r, m);
+        pitch_eigen(b, (EigenOut){.re = r, .im = m});
         double complex det = 1.0;
         for (int i = 0; i < 4; i++) {
             det *= r[i] + m[i] * I;
@@ -861,7 +887,7 @@ static void fig_divergence(void)
     p.static_margin = 0.0;
     s = pm_trimmed(&p, &de);
     pitch_jacobian(&p, &s, de, a);
-    pitch_eigen(a, re, im);
+    pitch_eigen(a, (EigenOut){.re = re, .im = im});
     double smallest = fabs(re[3]);
     value("neutral-root", "smallest eigenvalue modulus at SM 0 (theory 0: neutral stability)",
           smallest, 0.0);
@@ -877,7 +903,7 @@ static void fig_pitch_rk4(void)
 {
     PitchAircraft p = pitch_default();
     PitchMode sp, ph;
-    pitch_modes(&p, PM_ALPHA, &sp, &ph);
+    pitch_modes(&p, PM_ALPHA, (PitchModesOut){.short_period = &sp, .phugoid = &ph});
     double complex lambda = sp.re + sp.im * I;
     int n = 161;
     for (int i = 0; i < n; i++) {
