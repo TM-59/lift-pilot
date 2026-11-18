@@ -5,10 +5,16 @@
 Aircraft glider_default(void)
 {
     Aircraft a = {
-        .mass = 300.0, .area = 10.0, .rho = 1.225,
-        .cl0 = 0.2, .cl_alpha = 5.5, .alpha_stall = 0.26,
-        .cd0 = 0.015, .k = 0.02,
-        .tau = 0.25, .max_thrust = 0.1 * 300.0 * GRAVITY,
+        .mass = 300.0,
+        .area = 10.0,
+        .rho = 1.225,
+        .cl0 = 0.2,
+        .cl_alpha = 5.5,
+        .alpha_stall = 0.26,
+        .cd0 = 0.015,
+        .k = 0.02,
+        .tau = 0.25,
+        .max_thrust = 0.1 * 300.0 * GRAVITY,
     };
     return a;
 }
@@ -16,7 +22,8 @@ Aircraft glider_default(void)
 double lift_coeff(const Aircraft *a, double alpha)
 {
     double cl_stall = a->cl0 + a->cl_alpha * a->alpha_stall;
-    if (alpha <= a->alpha_stall) return a->cl0 + a->cl_alpha * alpha;
+    if (alpha <= a->alpha_stall)
+        return a->cl0 + a->cl_alpha * alpha;
     double cl = cl_stall * (1.0 - 3.0 * (alpha - a->alpha_stall));
     return cl > 0.3 * cl_stall ? cl : 0.3 * cl_stall;
 }
@@ -25,14 +32,12 @@ double drag_coeff(const Aircraft *a, double alpha)
 {
     double cl = lift_coeff(a, alpha);
     double cd = a->cd0 + a->k * cl * cl;
-    if (alpha > a->alpha_stall) cd += 10.0 * (alpha - a->alpha_stall) * (alpha - a->alpha_stall);
+    if (alpha > a->alpha_stall)
+        cd += 10.0 * (alpha - a->alpha_stall) * (alpha - a->alpha_stall);
     return cd;
 }
 
-static double dynamic_pressure(const Aircraft *a, double v)
-{
-    return 0.5 * a->rho * v * v;
-}
+static double dynamic_pressure(const Aircraft *a, double v) { return 0.5 * a->rho * v * v; }
 
 double lift_force(const Aircraft *a, const State *s)
 {
@@ -52,12 +57,10 @@ void trim_glide(const Aircraft *a, double alpha, State *s)
     s->v = sqrt(2.0 * a->mass * GRAVITY * cos(s->gamma) / (a->rho * a->area * cl));
 }
 
-double best_glide_ratio(const Aircraft *a)
-{
-    return 1.0 / (2.0 * sqrt(a->cd0 * a->k));
-}
+double best_glide_ratio(const Aircraft *a) { return 1.0 / (2.0 * sqrt(a->cd0 * a->k)); }
 
-static void derivative(const Aircraft *a, const State *s, double alpha_cmd, double throttle, State *d)
+static void derivative(const Aircraft *a, const State *s, double alpha_cmd, double throttle,
+                       State *d)
 {
     double l = lift_force(a, s), dr = drag_force(a, s);
     double thrust = throttle * a->max_thrust;
@@ -70,8 +73,8 @@ static void derivative(const Aircraft *a, const State *s, double alpha_cmd, doub
 
 static State advance(const State *s, const State *d, double dt)
 {
-    State n = {s->x + d->x * dt, s->h + d->h * dt, s->v + d->v * dt,
-               s->gamma + d->gamma * dt, s->alpha + d->alpha * dt};
+    State n = {s->x + d->x * dt, s->h + d->h * dt, s->v + d->v * dt, s->gamma + d->gamma * dt,
+               s->alpha + d->alpha * dt};
     return n;
 }
 
@@ -94,13 +97,11 @@ void flight_step(const Aircraft *a, State *s, double alpha_cmd, double throttle,
 
 Status check_touchdown(State *s)
 {
-    if (s->h > 0.0) return FLYING;
+    if (s->h > 0.0)
+        return FLYING;
     double sink = -s->v * sin(s->gamma);
     s->h = 0.0;
     return sink < 2.0 && fabs(s->gamma) < 0.15 ? LANDED : CRASHED;
 }
 
-double specific_energy(const State *s)
-{
-    return 0.5 * s->v * s->v + GRAVITY * s->h;
-}
+double specific_energy(const State *s) { return 0.5 * s->v * s->v + GRAVITY * s->h; }

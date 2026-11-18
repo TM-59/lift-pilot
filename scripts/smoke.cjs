@@ -1,322 +1,716 @@
 /* Local verification: native/WASM comparison, real controls and actual screenshots. */
-const {chromium} = require('playwright');
+const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
-const {pathToFileURL} = require('node:url');
-const {execFileSync} = require('node:child_process');
+const { pathToFileURL } = require('node:url');
+const { execFileSync } = require('node:child_process');
 const root = path.resolve('dist');
-const mime = {'.html':'text/html','.mjs':'text/javascript','.wasm':'application/wasm','.css':'text/css','.png':'image/png','.jpg':'image/jpeg'};
-const server = http.createServer((req,res) => {
-  const file=path.resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));
-  const target=file===root?path.join(root,'index.html'):file;
-  if(!target.startsWith(root+path.sep)){res.writeHead(403).end();return;}
-  fs.readFile(target,(error,data)=>{
-    if(error)res.writeHead(404).end();
-    else{res.setHeader('Content-Type',mime[path.extname(target)]||'application/octet-stream');res.end(data);}
+const mime = {
+  '.html': 'text/html',
+  '.mjs': 'text/javascript',
+  '.wasm': 'application/wasm',
+  '.css': 'text/css',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+};
+const server = http.createServer((req, res) => {
+  const file = path.resolve(
+    root,
+    '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname),
+  );
+  const target = file === root ? path.join(root, 'index.html') : file;
+  if (!target.startsWith(root + path.sep)) {
+    res.writeHead(403).end();
+    return;
+  }
+  fs.readFile(target, (error, data) => {
+    if (error) res.writeHead(404).end();
+    else {
+      res.setHeader('Content-Type', mime[path.extname(target)] || 'application/octet-stream');
+      res.end(data);
+    }
   });
 });
-let browser,checks=0;
-const check=(value,message)=>{assert.ok(value,message);checks++};
-const snapshot=page=>page.evaluate(()=>window.liftView.snapshot);
-async function capture(page,name){await page.screenshot({path:`docs/images/${name}.jpg`,type:'jpeg',quality:88,fullPage:true})}
-async function ready(page,url){await page.goto(url);await page.waitForFunction(()=>window.liftView?.snapshot?.artReady);await page.clock.install()}
+let browser,
+  checks = 0;
+const check = (value, message) => {
+  assert.ok(value, message);
+  checks++;
+};
+const snapshot = (page) => page.evaluate(() => window.liftView.snapshot);
+async function capture(page, name) {
+  await page.screenshot({
+    path: `docs/images/${name}.jpg`,
+    type: 'jpeg',
+    quality: 88,
+    fullPage: true,
+  });
+}
+async function ready(page, url) {
+  await page.goto(url);
+  await page.waitForFunction(() => window.liftView?.snapshot?.artReady);
+  await page.clock.install();
+}
 
 async function compareWasm() {
-  const createFlight=(await import(pathToFileURL(path.resolve('dist/physics.mjs')).href)).default;
-  const engine=await createFlight({wasmBinary:fs.readFileSync('dist/physics.wasm')});
-  const rows=fs.readFileSync('build/native-trace.csv','utf8').trim().split('\n').slice(1).map(line=>line.split(',').map(Number));
-  let row=0,maxError=0;
-  for(let mode=0;mode<3;mode++) {
+  const createFlight = (await import(pathToFileURL(path.resolve('dist/physics.mjs')).href)).default;
+  const engine = await createFlight({ wasmBinary: fs.readFileSync('dist/physics.wasm') });
+  const rows = fs
+    .readFileSync('build/native-trace.csv', 'utf8')
+    .trim()
+    .split('\n')
+    .slice(1)
+    .map((line) => line.split(',').map(Number));
+  let row = 0,
+    maxError = 0;
+  for (let mode = 0; mode < 3; mode++) {
     engine._lp_reset(mode);
-    for(let step=0;step<=6000;step++) {
-      if(step%20===0) {
-        const native=rows[row++];
-        assert.equal(native[0],mode);assert.equal(native[1],step);
-        for(let field=0;field<native.length-2;field++) {
-          const error=Math.abs(engine._lp_value(field)-native[field+2]);
-          maxError=Math.max(error,maxError);
-          assert.ok(Number.isFinite(error)&&error<1e-8,`WASM/native mode=${mode} step=${step} field=${field}: ${error}`);
+    for (let step = 0; step <= 6000; step++) {
+      if (step % 20 === 0) {
+        const native = rows[row++];
+        assert.equal(native[0], mode);
+        assert.equal(native[1], step);
+        for (let field = 0; field < native.length - 2; field++) {
+          const error = Math.abs(engine._lp_value(field) - native[field + 2]);
+          maxError = Math.max(error, maxError);
+          assert.ok(
+            Number.isFinite(error) && error < 1e-8,
+            `WASM/native mode=${mode} step=${step} field=${field}: ${error}`,
+          );
         }
       }
-      if(mode===0&&step===100)engine._lp_controls(7,.2);
-      if(mode===0&&step===400)engine._lp_controls(3,0);
-      if(mode===0&&step===800)engine._lp_controls(4,0);
+      if (mode === 0 && step === 100) engine._lp_controls(7, 0.2);
+      if (mode === 0 && step === 400) engine._lp_controls(3, 0);
+      if (mode === 0 && step === 800) engine._lp_controls(4, 0);
       engine._lp_step(1);
     }
   }
-  check(row===rows.length,'all native trajectory samples checked');
+  check(row === rows.length, 'all native trajectory samples checked');
   // Pitch laboratory: the WebAssembly eigenvalues against the native values written by make theory-figs.
-  const values=Object.fromEntries([...fs.readFileSync('docs/theory/figures/values.md','utf8').matchAll(/^\| `([^`]+)` \| [^|]+ \| ([^ |]+) \|/gm)].map(m=>[m[1],Number(m[2])]));
-  engine._pl_reset(.15);
-  const pitch={spRe:engine._pl_value(17),spIm:engine._pl_value(21),phRe:engine._pl_value(19),phIm:engine._pl_value(23),trimAfterStep:0};
-  for(const [key,id] of [['spRe','sp-eig-re'],['spIm','sp-eig-im'],['phRe','ph-eig-re'],['phIm','ph-eig-im']])
-    check(Math.abs(pitch[key]/values[id]-1)<1e-5,`WASM ${key} ${pitch[key]} vs native ${id} ${values[id]}`);
-  engine._pl_elevator(-1);pitch.trimAfterStep=engine._pl_value(7);
-  check(Math.abs(pitch.trimAfterStep-values['step-alpha'])<1e-4,`WASM steady alpha ${pitch.trimAfterStep} vs native ${values['step-alpha']}`);
-  return {rows:row,fields:rows[0].length-2,maxError,tolerance:1e-8,pitch};
+  const values = Object.fromEntries(
+    [
+      ...fs
+        .readFileSync('docs/theory/figures/values.md', 'utf8')
+        .matchAll(/^\| `([^`]+)` \| [^|]+ \| ([^ |]+) \|/gm),
+    ].map((m) => [m[1], Number(m[2])]),
+  );
+  engine._pl_reset(0.15);
+  const pitch = {
+    spRe: engine._pl_value(17),
+    spIm: engine._pl_value(21),
+    phRe: engine._pl_value(19),
+    phIm: engine._pl_value(23),
+    trimAfterStep: 0,
+  };
+  for (const [key, id] of [
+    ['spRe', 'sp-eig-re'],
+    ['spIm', 'sp-eig-im'],
+    ['phRe', 'ph-eig-re'],
+    ['phIm', 'ph-eig-im'],
+  ])
+    check(
+      Math.abs(pitch[key] / values[id] - 1) < 1e-5,
+      `WASM ${key} ${pitch[key]} vs native ${id} ${values[id]}`,
+    );
+  engine._pl_elevator(-1);
+  pitch.trimAfterStep = engine._pl_value(7);
+  check(
+    Math.abs(pitch.trimAfterStep - values['step-alpha']) < 1e-4,
+    `WASM steady alpha ${pitch.trimAfterStep} vs native ${values['step-alpha']}`,
+  );
+  return { rows: row, fields: rows[0].length - 2, maxError, tolerance: 1e-8, pitch };
 }
 
 async function run() {
-  const started=performance.now(),equivalence=await compareWasm();
-  fs.mkdirSync('docs/images',{recursive:true});
-  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
-  const origin=`http://127.0.0.1:${server.address().port}`;
-  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
-  const errors=[],external=[];
-  const context=await browser.newContext({viewport:{width:1440,height:1050},deviceScaleFactor:1});
-  const track=page=>{
-    page.on('pageerror',error=>errors.push(error.message));
-    page.on('console',msg=>{if(msg.type()==='error')errors.push(msg.text())});
-    page.on('request',req=>{if(!req.url().startsWith(origin)&&!req.url().startsWith('data:'))external.push(req.url())});
+  const started = performance.now(),
+    equivalence = await compareWasm();
+  fs.mkdirSync('docs/images', { recursive: true });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  const errors = [],
+    external = [];
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 1050 },
+    deviceScaleFactor: 1,
+  });
+  const track = (page) => {
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+    page.on('request', (req) => {
+      if (!req.url().startsWith(origin) && !req.url().startsWith('data:')) external.push(req.url());
+    });
   };
-  const before=await context.newPage();
-  const terminal=execFileSync('./lift-pilot',['--snapshot'],{encoding:'utf8'});
-  await before.setContent('<html lang="en"><body style="margin:0;background:#0c1220;color:#dce8e9;padding:40px"><p style="font:16px monospace">Original terminal output / ./lift-pilot --snapshot</p><pre style="font:16px/1.45 monospace"></pre></body></html>');
-  await before.locator('pre').evaluate((el,text)=>el.textContent=text,terminal);
-  await capture(before,'before-terminal');await before.close();
-  const page=await context.newPage();track(page);await ready(page,origin+'/');
-  check((await snapshot(page)).paused,'starts paused');await capture(page,'observatory');
-  const initial=await snapshot(page);
-  await page.getByRole('button',{name:'Start flying'}).click();
-  await page.keyboard.press('w');await page.keyboard.press('r');await page.clock.runFor(1500);
-  const manual=await snapshot(page);
-  check(Math.abs(manual.command-5)<1e-10&&Math.abs(manual.throttle-.05)<1e-10,'keyboard reaches C controls');
-  check(manual.time>1&&manual.h!==initial.h,'manual flight advances');
-  await page.keyboard.press('p');const paused=await snapshot(page);await page.clock.runFor(500);
-  check((await snapshot(page)).time===paused.time,'pause freezes C state');await capture(page,'manual-flight');
-  await page.getByRole('button',{name:'Trimmed landing',exact:true}).click();
+  const before = await context.newPage();
+  const terminal = execFileSync('./lift-pilot', ['--snapshot'], { encoding: 'utf8' });
+  await before.setContent(
+    '<html lang="en"><body style="margin:0;background:#0c1220;color:#dce8e9;padding:40px"><p style="font:16px monospace">Original terminal output / ./lift-pilot --snapshot</p><pre style="font:16px/1.45 monospace"></pre></body></html>',
+  );
+  await before.locator('pre').evaluate((el, text) => (el.textContent = text), terminal);
+  await capture(before, 'before-terminal');
+  await before.close();
+  const page = await context.newPage();
+  track(page);
+  await ready(page, origin + '/');
+  check((await snapshot(page)).paused, 'starts paused');
+  await capture(page, 'observatory');
+  const initial = await snapshot(page);
+  await page.getByRole('button', { name: 'Start flying' }).click();
+  await page.keyboard.press('w');
+  await page.keyboard.press('r');
+  await page.clock.runFor(1500);
+  const manual = await snapshot(page);
+  check(
+    Math.abs(manual.command - 5) < 1e-10 && Math.abs(manual.throttle - 0.05) < 1e-10,
+    'keyboard reaches C controls',
+  );
+  check(manual.time > 1 && manual.h !== initial.h, 'manual flight advances');
+  await page.keyboard.press('p');
+  const paused = await snapshot(page);
+  await page.clock.runFor(500);
+  check((await snapshot(page)).time === paused.time, 'pause freezes C state');
+  await capture(page, 'manual-flight');
+  await page.getByRole('button', { name: 'Trimmed landing', exact: true }).click();
   await page.clock.runFor(94000);
-  const landing=await snapshot(page);
-  check(landing.status===1&&landing.onRunway===1,'UI demo lands gently on runway');
-  check(landing.sink<2&&Math.abs(landing.gamma)<.15,'landing matches C thresholds');
-  check(landing.paused,'touchdown stops simulation');await capture(page,'landing');
-  await page.getByRole('button',{name:'Speed ↔ height',exact:true}).click();await page.clock.runFor(30000);
-  const phugoid=await snapshot(page);
-  check(phugoid.mode===2&&phugoid.samples>100,'phugoid has measured history');
-  check(await page.locator('#pitch').isDisabled(),'demo locks manual controls');
-  await page.getByRole('button',{name:'Pause flight'}).click();await capture(page,'phugoid');
-  await page.getByRole('button',{name:'Resume flight'}).click();await page.clock.runFor(91000);
-  check((await snapshot(page)).paused&&(await snapshot(page)).time>=120,'phugoid stops at observation limit');
-  check(await page.getByText('Observation complete · 120 s').isVisible(),'completed observation is clearly labelled');
-  await page.getByRole('button',{name:'Reset flight',exact:true}).click();
-  check((await snapshot(page)).mode===0&&(await snapshot(page)).time===0,'reset clears mode and time');
-  await page.locator('#pitch').fill('20');await page.getByRole('button',{name:'Start flying'}).click();await page.clock.runFor(1300);
-  check((await snapshot(page)).stall===1&&await page.locator('#stall').isVisible(),'real C stall is visible');
-  await page.keyboard.press('p');await capture(page,'stall');
-  check(await page.locator('body').evaluate(el=>el.scrollWidth<=innerWidth),'desktop has no horizontal overflow');
-  await page.getByRole('button',{name:'Reset flight',exact:true}).click();
-  await page.locator('#pitch').fill('-10');await page.getByRole('button',{name:'Start flying'}).click();await page.clock.runFor(30000);
-  const crash=await snapshot(page);
-  check(crash.status===2&&crash.paused,'hard landing is distinguished from a gentle landing');
-  await page.getByRole('link',{name:'How it flies'}).click();
-  check(page.url().endsWith('#field-notes')&&await page.locator('#field-notes').evaluate(el=>el.getBoundingClientRect().top<innerHeight),'field notes link reaches explanation');
-  const mobileContext=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
-  const mobile=await mobileContext.newPage();track(mobile);await ready(mobile,origin+'/');
-  await mobile.getByRole('button',{name:'Increase angle of attack'}).tap();
-  check((await snapshot(mobile)).command===5,'touch control reaches C');
-  await mobile.getByRole('button',{name:'Start flying'}).tap();await mobile.clock.runFor(600);
-  check((await snapshot(mobile)).time>.4,'touch starts real simulation');
-  await mobile.getByRole('button',{name:'Pause flight'}).tap();
-  check(await mobile.locator('body').evaluate(el=>el.scrollWidth<=innerWidth),'390px has no overflow');
-  for(const el of await mobile.locator('button').all()) {
-    const rect=await el.boundingBox();if(!rect)continue;check(rect.width>=44&&rect.height>=44,'buttons have 44px touch target');
+  const landing = await snapshot(page);
+  check(landing.status === 1 && landing.onRunway === 1, 'UI demo lands gently on runway');
+  check(landing.sink < 2 && Math.abs(landing.gamma) < 0.15, 'landing matches C thresholds');
+  check(landing.paused, 'touchdown stops simulation');
+  await capture(page, 'landing');
+  await page.getByRole('button', { name: 'Speed ↔ height', exact: true }).click();
+  await page.clock.runFor(30000);
+  const phugoid = await snapshot(page);
+  check(phugoid.mode === 2 && phugoid.samples > 100, 'phugoid has measured history');
+  check(await page.locator('#pitch').isDisabled(), 'demo locks manual controls');
+  await page.getByRole('button', { name: 'Pause flight' }).click();
+  await capture(page, 'phugoid');
+  await page.getByRole('button', { name: 'Resume flight' }).click();
+  await page.clock.runFor(91000);
+  check(
+    (await snapshot(page)).paused && (await snapshot(page)).time >= 120,
+    'phugoid stops at observation limit',
+  );
+  check(
+    await page.getByText('Observation complete · 120 s').isVisible(),
+    'completed observation is clearly labelled',
+  );
+  await page.getByRole('button', { name: 'Reset flight', exact: true }).click();
+  check(
+    (await snapshot(page)).mode === 0 && (await snapshot(page)).time === 0,
+    'reset clears mode and time',
+  );
+  await page.locator('#pitch').fill('20');
+  await page.getByRole('button', { name: 'Start flying' }).click();
+  await page.clock.runFor(1300);
+  check(
+    (await snapshot(page)).stall === 1 && (await page.locator('#stall').isVisible()),
+    'real C stall is visible',
+  );
+  await page.keyboard.press('p');
+  await capture(page, 'stall');
+  check(
+    await page.locator('body').evaluate((el) => el.scrollWidth <= innerWidth),
+    'desktop has no horizontal overflow',
+  );
+  await page.getByRole('button', { name: 'Reset flight', exact: true }).click();
+  await page.locator('#pitch').fill('-10');
+  await page.getByRole('button', { name: 'Start flying' }).click();
+  await page.clock.runFor(30000);
+  const crash = await snapshot(page);
+  check(crash.status === 2 && crash.paused, 'hard landing is distinguished from a gentle landing');
+  await page.getByRole('link', { name: 'How it flies' }).click();
+  check(
+    page.url().endsWith('#field-notes') &&
+      (await page
+        .locator('#field-notes')
+        .evaluate((el) => el.getBoundingClientRect().top < innerHeight)),
+    'field notes link reaches explanation',
+  );
+  const mobileContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 1,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const mobile = await mobileContext.newPage();
+  track(mobile);
+  await ready(mobile, origin + '/');
+  await mobile.getByRole('button', { name: 'Increase angle of attack' }).tap();
+  check((await snapshot(mobile)).command === 5, 'touch control reaches C');
+  await mobile.getByRole('button', { name: 'Start flying' }).tap();
+  await mobile.clock.runFor(600);
+  check((await snapshot(mobile)).time > 0.4, 'touch starts real simulation');
+  await mobile.getByRole('button', { name: 'Pause flight' }).tap();
+  check(
+    await mobile.locator('body').evaluate((el) => el.scrollWidth <= innerWidth),
+    '390px has no overflow',
+  );
+  for (const el of await mobile.locator('button').all()) {
+    const rect = await el.boundingBox();
+    if (!rect) continue;
+    check(rect.width >= 44 && rect.height >= 44, 'buttons have 44px touch target');
   }
-  await mobile.evaluate(()=>scrollTo(0,0));await capture(mobile,'mobile');await mobileContext.close();
+  await mobile.evaluate(() => scrollTo(0, 0));
+  await capture(mobile, 'mobile');
+  await mobileContext.close();
   // Degraded art must not block the physics or produce a synthetic replacement drawing.
-  const fallback=await context.newPage();track(fallback);
-  await fallback.route('**/art/**',route=>route.fulfill({status:200,body:''}));
-  await fallback.goto(origin+'/');await fallback.waitForFunction(()=>window.liftView?.snapshot);
-  await fallback.clock.install();await fallback.getByRole('button',{name:'Start flying'}).click();await fallback.clock.runFor(300);
-  check((await snapshot(fallback)).time>0&&!(await snapshot(fallback)).artReady,'art failure leaves controls usable');
+  const fallback = await context.newPage();
+  track(fallback);
+  await fallback.route('**/art/**', (route) => route.fulfill({ status: 200, body: '' }));
+  await fallback.goto(origin + '/');
+  await fallback.waitForFunction(() => window.liftView?.snapshot);
+  await fallback.clock.install();
+  await fallback.getByRole('button', { name: 'Start flying' }).click();
+  await fallback.clock.runFor(300);
+  check(
+    (await snapshot(fallback)).time > 0 && !(await snapshot(fallback)).artReady,
+    'art failure leaves controls usable',
+  );
   await fallback.close();
   // Engine failure is a visible, noninteractive error state, not fake telemetry.
-  const broken=await context.newPage();
-  await broken.route('**/physics.wasm',route=>route.fulfill({status:200,body:''}));
-  await broken.goto(origin+'/');await broken.getByText('Flight model unavailable — reload to retry').waitFor();
-  check(await broken.locator('#toggle').isDisabled()&&await broken.locator('#pitch').isDisabled(),'WASM failure disables controls');
+  const broken = await context.newPage();
+  await broken.route('**/physics.wasm', (route) => route.fulfill({ status: 200, body: '' }));
+  await broken.goto(origin + '/');
+  await broken.getByText('Flight model unavailable — reload to retry').waitFor();
+  check(
+    (await broken.locator('#toggle').isDisabled()) && (await broken.locator('#pitch').isDisabled()),
+    'WASM failure disables controls',
+  );
   await broken.getByText('Pitch model unavailable — reload the page to retry').waitFor();
-  check(await broken.locator('#pl-step').isDisabled()&&await broken.locator('#pl-margin').isDisabled(),'WASM failure disables the pitch laboratory');
+  check(
+    (await broken.locator('#pl-step').isDisabled()) &&
+      (await broken.locator('#pl-margin').isDisabled()),
+    'WASM failure disables the pitch laboratory',
+  );
   await broken.close();
-  const ferryRuns=[];
-  for(const path of [{weir:0,mill:0,shots:true},{weir:1,mill:1,shots:false}]) ferryRuns.push(await flyFerry(context,origin,track,path));
-  const phone=await ferryPhone(browser,origin,track);
-  const guide=await guideCheck(browser,origin,track);
-  const pitchLab=await pitchLabCheck(browser,origin,track);
-  check(errors.length===0,`console/page errors ${errors.join(';')}`);check(external.length===0,'no external requests');
-  const result={checks,seconds:(performance.now()-started)/1000,equivalence,errors:errors.length,externalRequests:external.length,
-    landing:{time:landing.time,x:landing.x,sink:landing.sink,status:landing.status,onRunway:landing.onRunway},
-    manual:{time:manual.time,command:manual.command,throttle:manual.throttle},phugoid:{time:phugoid.time,samples:phugoid.samples},
-    ferry:ferryRuns,phone,guide,pitchLab,
-    screenshots:fs.readdirSync('docs/images').filter(file=>file.endsWith('.jpg')).sort()};
-  fs.writeFileSync('docs/validation.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result,null,2));
+  const ferryRuns = [];
+  for (const path of [
+    { weir: 0, mill: 0, shots: true },
+    { weir: 1, mill: 1, shots: false },
+  ])
+    ferryRuns.push(await flyFerry(context, origin, track, path));
+  const phone = await ferryPhone(browser, origin, track);
+  const guide = await guideCheck(browser, origin, track);
+  const pitchLab = await pitchLabCheck(browser, origin, track);
+  check(errors.length === 0, `console/page errors ${errors.join(';')}`);
+  check(external.length === 0, 'no external requests');
+  const result = {
+    checks,
+    seconds: (performance.now() - started) / 1000,
+    equivalence,
+    errors: errors.length,
+    externalRequests: external.length,
+    landing: {
+      time: landing.time,
+      x: landing.x,
+      sink: landing.sink,
+      status: landing.status,
+      onRunway: landing.onRunway,
+    },
+    manual: { time: manual.time, command: manual.command, throttle: manual.throttle },
+    phugoid: { time: phugoid.time, samples: phugoid.samples },
+    ferry: ferryRuns,
+    phone,
+    guide,
+    pitchLab,
+    screenshots: fs
+      .readdirSync('docs/images')
+      .filter((file) => file.endsWith('.jpg'))
+      .sort(),
+  };
+  fs.writeFileSync('docs/validation.json', JSON.stringify(result, null, 2) + '\n');
+  console.log(JSON.stringify(result, null, 2));
 }
 // The last ferry, flown through the page with real clicks and the real sliders: a simple pilot that reads the
 // glide gauges on screen (motor on when the glide needed is steeper than the glide being made, if there is a motor).
-const ORDER=['hangar','weir','orchard','buyer','mill','doors','coast'];
-const HEAVY=['buyer','mill','doors'];
-async function flyFerry(context,origin,track,path) {
-  const page=await context.newPage();track(page);await ready(page,origin+'/');
-  check((await snapshot(page)).welcome,'welcome card on first load');
-  await page.getByRole('button',{name:'Fly the last ferry',exact:false}).first().click();
-  let snap=await snapshot(page);
-  check(snap.ferry&&snap.sceneId==='hangar'&&snap.sceneText.includes("They're not in the sale."),'the ferry opens in the hangar');
-  if(path.shots)await capture(page,'ferry-hangar');
-  const seen=[],quietAfter=[];let shot=false,frames=0;
-  while(frames++<6000) {
-    snap=await snapshot(page);
-    if(snap.sceneId) {
-      const id=snap.sceneId;
-      if(!seen.length||seen[seen.length-1]!==id) seen.push(id);
-      if(HEAVY.includes(id)) {
-        check(!snap.bannerShown&&await page.locator('#story').evaluate(el=>el.classList.contains('heavy')),`${id} is shown dark with no banner`);
-        if(path.shots&&id==='mill')await capture(page,'ferry-mill');
+const ORDER = ['hangar', 'weir', 'orchard', 'buyer', 'mill', 'doors', 'coast'];
+const HEAVY = ['buyer', 'mill', 'doors'];
+async function flyFerry(context, origin, track, path) {
+  const page = await context.newPage();
+  track(page);
+  await ready(page, origin + '/');
+  check((await snapshot(page)).welcome, 'welcome card on first load');
+  await page.getByRole('button', { name: 'Fly the last ferry', exact: false }).first().click();
+  let snap = await snapshot(page);
+  check(
+    snap.ferry && snap.sceneId === 'hangar' && snap.sceneText.includes("They're not in the sale."),
+    'the ferry opens in the hangar',
+  );
+  if (path.shots) await capture(page, 'ferry-hangar');
+  const seen = [],
+    quietAfter = [];
+  let shot = false,
+    frames = 0;
+  while (frames++ < 6000) {
+    snap = await snapshot(page);
+    if (snap.sceneId) {
+      const id = snap.sceneId;
+      if (!seen.length || seen[seen.length - 1] !== id) seen.push(id);
+      if (HEAVY.includes(id)) {
+        check(
+          !snap.bannerShown &&
+            (await page.locator('#story').evaluate((el) => el.classList.contains('heavy'))),
+          `${id} is shown dark with no banner`,
+        );
+        if (path.shots && id === 'mill') await capture(page, 'ferry-mill');
       }
-      if(id==='coast') break;
-      const option=id==='weir'?path.weir:id==='mill'?path.mill:0;
+      if (id === 'coast') break;
+      const option = id === 'weir' ? path.weir : id === 'mill' ? path.mill : 0;
       await page.locator('#story-options button').nth(option).click();
-      if(HEAVY.includes(id)) { await page.clock.runFor(100);const after=await snapshot(page);quietAfter.push(id);check(after.banner!==1&&!after.bannerShown,`no strip-made banner after ${id}`); }
+      if (HEAVY.includes(id)) {
+        await page.clock.runFor(100);
+        const after = await snapshot(page);
+        quietAfter.push(id);
+        check(after.banner !== 1 && !after.bannerShown, `no strip-made banner after ${id}`);
+      }
       continue;
     }
-    const low=snap.lowOn&&snap.motor&&snap.charge>0;
-    const pitch=low?'6.5':'4.5',throttle=low?'100':'0';
-    if(String(snap.inputCommand)!==pitch)await page.locator('#pitch').fill(pitch);
-    if(snap.motor&&String(Math.round(snap.inputThrottle*100))!==throttle&&await page.locator('#throttle').isEnabled())await page.locator('#throttle').fill(throttle);
-    if(path.shots&&!shot&&snap.hop===1&&snap.x>1200){shot=true;await capture(page,'ferry-flight');}
+    const low = snap.lowOn && snap.motor && snap.charge > 0;
+    const pitch = low ? '6.5' : '4.5',
+      throttle = low ? '100' : '0';
+    if (String(snap.inputCommand) !== pitch) await page.locator('#pitch').fill(pitch);
+    if (
+      snap.motor &&
+      String(Math.round(snap.inputThrottle * 100)) !== throttle &&
+      (await page.locator('#throttle').isEnabled())
+    )
+      await page.locator('#throttle').fill(throttle);
+    if (path.shots && !shot && snap.hop === 1 && snap.x > 1200) {
+      shot = true;
+      await capture(page, 'ferry-flight');
+    }
     await page.clock.runFor(1000);
   }
-  snap=await snapshot(page);
-  check(snap.sceneId==='coast','the ferry reaches the coast');
-  check(JSON.stringify(seen)===JSON.stringify(ORDER),`scenes in order: ${seen.join(',')}`);
-  check(snap.heavyLog.map(h=>h.id).join()===HEAVY.join()&&snap.heavyLog.every(h=>!h.bannerShown&&h.banner!==1),'heavy scenes logged quiet');
-  const ending=path.mill===0?'reading glasses':'logbook under your arm';
-  check(snap.sceneText.includes(ending),`ending for mill=${path.mill}`);
-  check(snap.pulled===path.mill&&snap.route===path.weir,'choices reached C');
-  if(path.shots)await capture(page,'ferry-ending');
-  const result={path:{weir:path.weir,mill:path.mill},scenes:seen.length,time:+snap.time.toFixed(1),outlandings:snap.outlandings,trailered:snap.trailered,low:+snap.low.toFixed(1)};
-  await page.getByRole('button',{name:'Start again'}).click();
-  check((await snapshot(page)).sceneId==='hangar','start again returns to the hangar');
-  await page.close();return result;
+  snap = await snapshot(page);
+  check(snap.sceneId === 'coast', 'the ferry reaches the coast');
+  check(JSON.stringify(seen) === JSON.stringify(ORDER), `scenes in order: ${seen.join(',')}`);
+  check(
+    snap.heavyLog.map((h) => h.id).join() === HEAVY.join() &&
+      snap.heavyLog.every((h) => !h.bannerShown && h.banner !== 1),
+    'heavy scenes logged quiet',
+  );
+  const ending = path.mill === 0 ? 'reading glasses' : 'logbook under your arm';
+  check(snap.sceneText.includes(ending), `ending for mill=${path.mill}`);
+  check(snap.pulled === path.mill && snap.route === path.weir, 'choices reached C');
+  if (path.shots) await capture(page, 'ferry-ending');
+  const result = {
+    path: { weir: path.weir, mill: path.mill },
+    scenes: seen.length,
+    time: +snap.time.toFixed(1),
+    outlandings: snap.outlandings,
+    trailered: snap.trailered,
+    low: +snap.low.toFixed(1),
+  };
+  await page.getByRole('button', { name: 'Start again' }).click();
+  check((await snapshot(page)).sceneId === 'hangar', 'start again returns to the hangar');
+  await page.close();
+  return result;
 }
 // Phone-sized, touch only: the welcome card, the first scene and its answer are readable and tappable.
-async function ferryPhone(browser,origin,track) {
-  const out={};
-  for(const [name,viewport] of [['portrait',{width:375,height:812}],['landscape',{width:812,height:375}]]) {
-    const ctx=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:true,hasTouch:true});
-    const page=await ctx.newPage();track(page);await ready(page,origin+'/');
-    await page.locator('#welcome-start').tap();
-    const sizes=await page.evaluate(()=>{
-      const fonts=[...document.querySelectorAll('#story-text p,#story-options button,#story h3')].map(el=>parseFloat(getComputedStyle(el).fontSize));
-      const targets=[...document.querySelectorAll('#story-options button')].map(el=>{const r=el.getBoundingClientRect();return Math.min(r.width,r.height)});
-      const c=document.getElementById('scene').getBoundingClientRect();
-      return {font:Math.min(...fonts),target:Math.min(...targets),area:+(Math.min(c.width,innerWidth)*Math.min(c.height,innerHeight)/(innerWidth*innerHeight)).toFixed(3),
-        overflow:document.documentElement.scrollWidth>innerWidth};
+async function ferryPhone(browser, origin, track) {
+  const out = {};
+  for (const [name, viewport] of [
+    ['portrait', { width: 375, height: 812 }],
+    ['landscape', { width: 812, height: 375 }],
+  ]) {
+    const ctx = await browser.newContext({
+      viewport,
+      deviceScaleFactor: 1,
+      isMobile: true,
+      hasTouch: true,
     });
-    check(sizes.font>=14&&sizes.target>=44&&!sizes.overflow&&sizes.area>=.5,`${name}: scene text ${sizes.font}px, answers ${sizes.target}px, view ${sizes.area}`);
+    const page = await ctx.newPage();
+    track(page);
+    await ready(page, origin + '/');
+    await page.locator('#welcome-start').tap();
+    const sizes = await page.evaluate(() => {
+      const fonts = [
+        ...document.querySelectorAll('#story-text p,#story-options button,#story h3'),
+      ].map((el) => parseFloat(getComputedStyle(el).fontSize));
+      const targets = [...document.querySelectorAll('#story-options button')].map((el) => {
+        const r = el.getBoundingClientRect();
+        return Math.min(r.width, r.height);
+      });
+      const c = document.getElementById('scene').getBoundingClientRect();
+      return {
+        font: Math.min(...fonts),
+        target: Math.min(...targets),
+        area: +(
+          (Math.min(c.width, innerWidth) * Math.min(c.height, innerHeight)) /
+          (innerWidth * innerHeight)
+        ).toFixed(3),
+        overflow: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+    check(
+      sizes.font >= 14 && sizes.target >= 44 && !sizes.overflow && sizes.area >= 0.5,
+      `${name}: scene text ${sizes.font}px, answers ${sizes.target}px, view ${sizes.area}`,
+    );
     await page.locator('#story-options button').first().tap();
     await page.clock.runFor(2000);
-    const snap=await snapshot(page);
-    check(snap.hop===0&&!snap.sceneId&&snap.time>1&&await page.evaluate(()=>window.__tmGate.goal()),`${name}: one tap takes off`);
-    if(name==='portrait')await capture(page,'mobile-ferry');
-    out[name]=sizes;await ctx.close();
+    const snap = await snapshot(page);
+    check(
+      snap.hop === 0 &&
+        !snap.sceneId &&
+        snap.time > 1 &&
+        (await page.evaluate(() => window.__tmGate.goal())),
+      `${name}: one tap takes off`,
+    );
+    if (name === 'portrait') await capture(page, 'mobile-ferry');
+    out[name] = sizes;
+    await ctx.close();
   }
   return out;
 }
 // The goal and the next step (bug #10): always on screen above the view, 14 CSS px or larger, the same words as
 // __tmGate.objective()/hint(), and never over the view, the instruments, the quick controls or the alerts.
-async function guideCheck(browser,origin,track) {
-  const out={};
-  const measure=page=>page.evaluate(()=>{
-    const R=el=>el.getBoundingClientRect(),g=document.getElementById('guide'),rg=R(g);
-    const hit=(a,b)=>a.left<b.right-.5&&b.left<a.right-.5&&a.top<b.bottom-.5&&b.top<a.bottom-.5;
-    const others=['scene','lab-telemetry','ferry-telemetry','.quick','.alerts','.control-panel']
-      .map(sel=>sel[0]==='.'?document.querySelector(sel):document.getElementById(sel)).filter(el=>el&&el.getClientRects().length);
-    const quick=[...document.querySelectorAll('.quick button')].filter(el=>el.getClientRects().length).map(R);
-    return {goal:document.getElementById('goal-line').textContent,next:document.getElementById('next-step').textContent,
-      hook:window.__tmGate.objective()===document.getElementById('goal-line').textContent&&window.__tmGate.hint()===document.getElementById('next-step').textContent,
-      font:Math.min(...[...g.querySelectorAll('span')].map(el=>parseFloat(getComputedStyle(el).fontSize))),
-      overlaps:others.filter(el=>hit(rg,R(el))).length,inView:rg.top>=0&&rg.bottom<=innerHeight,
-      quick:quick.length,quickInView:quick.every(r=>r.bottom<=innerHeight&&r.width>=44&&r.height>=44),
-      target:window.liftView.snapshot.guide.target,next2:window.__tmGate.nextTarget()};
-  });
-  const pitch=(page,value)=>page.evaluate(v=>{const el=document.getElementById('pitch');el.value=v;el.dispatchEvent(new Event('input'))},value);
-  for(const [name,viewport] of [['portrait',{width:375,height:812}],['landscape',{width:812,height:375}],['small-landscape',{width:667,height:375}],['desktop',{width:1440,height:1000}]]) {
-    const phone=name!=='desktop';
-    const ctx=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:phone,hasTouch:phone});
-    const page=await ctx.newPage();track(page);await ready(page,origin+'/');
-    const states={welcome:await measure(page)};
-    await page.locator('#welcome-start').click();states.scene=await measure(page);
-    await page.locator('#story-options button').first().click();await page.clock.runFor(2000);states.glide=await measure(page);
-    for(let i=0;i<40&&!(await snapshot(page)).lowOn;i++){await pitch(page,12);await page.clock.runFor(1000);}
-    states.low=await measure(page);
-    await pitch(page,20);await page.clock.runFor(1500);states.stall=await measure(page);
-    if(name==='portrait'){
-      await capture(page,'mobile-guide');
+async function guideCheck(browser, origin, track) {
+  const out = {};
+  const measure = (page) =>
+    page.evaluate(() => {
+      const R = (el) => el.getBoundingClientRect(),
+        g = document.getElementById('guide'),
+        rg = R(g);
+      const hit = (a, b) =>
+        a.left < b.right - 0.5 &&
+        b.left < a.right - 0.5 &&
+        a.top < b.bottom - 0.5 &&
+        b.top < a.bottom - 0.5;
+      const others = [
+        'scene',
+        'lab-telemetry',
+        'ferry-telemetry',
+        '.quick',
+        '.alerts',
+        '.control-panel',
+      ]
+        .map((sel) => (sel[0] === '.' ? document.querySelector(sel) : document.getElementById(sel)))
+        .filter((el) => el && el.getClientRects().length);
+      const quick = [...document.querySelectorAll('.quick button')]
+        .filter((el) => el.getClientRects().length)
+        .map(R);
+      return {
+        goal: document.getElementById('goal-line').textContent,
+        next: document.getElementById('next-step').textContent,
+        hook:
+          window.__tmGate.objective() === document.getElementById('goal-line').textContent &&
+          window.__tmGate.hint() === document.getElementById('next-step').textContent,
+        font: Math.min(
+          ...[...g.querySelectorAll('span')].map((el) => parseFloat(getComputedStyle(el).fontSize)),
+        ),
+        overlaps: others.filter((el) => hit(rg, R(el))).length,
+        inView: rg.top >= 0 && rg.bottom <= innerHeight,
+        quick: quick.length,
+        quickInView: quick.every((r) => r.bottom <= innerHeight && r.width >= 44 && r.height >= 44),
+        target: window.liftView.snapshot.guide.target,
+        next2: window.__tmGate.nextTarget(),
+      };
+    });
+  const pitch = (page, value) =>
+    page.evaluate((v) => {
+      const el = document.getElementById('pitch');
+      el.value = v;
+      el.dispatchEvent(new Event('input'));
+    }, value);
+  for (const [name, viewport] of [
+    ['portrait', { width: 375, height: 812 }],
+    ['landscape', { width: 812, height: 375 }],
+    ['small-landscape', { width: 667, height: 375 }],
+    ['desktop', { width: 1440, height: 1000 }],
+  ]) {
+    const phone = name !== 'desktop';
+    const ctx = await browser.newContext({
+      viewport,
+      deviceScaleFactor: 1,
+      isMobile: phone,
+      hasTouch: phone,
+    });
+    const page = await ctx.newPage();
+    track(page);
+    await ready(page, origin + '/');
+    const states = { welcome: await measure(page) };
+    await page.locator('#welcome-start').click();
+    states.scene = await measure(page);
+    await page.locator('#story-options button').first().click();
+    await page.clock.runFor(2000);
+    states.glide = await measure(page);
+    for (let i = 0; i < 40 && !(await snapshot(page)).lowOn; i++) {
+      await pitch(page, 12);
+      await page.clock.runFor(1000);
+    }
+    states.low = await measure(page);
+    await pitch(page, 20);
+    await page.clock.runFor(1500);
+    states.stall = await measure(page);
+    if (name === 'portrait') {
+      await capture(page, 'mobile-guide');
       // Scrolled down to the instruments, the goal and the next step stay pinned at the top of the screen.
-      const pinned=await page.evaluate(()=>{scrollTo(0,420);const r=document.getElementById('guide').getBoundingClientRect();const top=r.top;scrollTo(0,0);return top>=0&&r.bottom<=innerHeight});
-      check(pinned,'portrait: the guide stays on screen when the page is scrolled');
+      const pinned = await page.evaluate(() => {
+        scrollTo(0, 420);
+        const r = document.getElementById('guide').getBoundingClientRect();
+        const top = r.top;
+        scrollTo(0, 0);
+        return top >= 0 && r.bottom <= innerHeight;
+      });
+      check(pinned, 'portrait: the guide stays on screen when the page is scrolled');
     }
-    for(const [state,m] of Object.entries(states)) {
-      check(m.hook&&m.goal&&m.next,`${name} ${state}: goal and next step shown and equal to the hook`);
-      check(m.font>=14&&m.inView&&m.overlaps===0,`${name} ${state}: guide ${m.font}px, in view ${m.inView}, overlaps ${m.overlaps}`);
-      if(name==='portrait')check(m.quick===4&&m.quickInView,`${name} ${state}: quick controls on screen`);
+    for (const [state, m] of Object.entries(states)) {
+      check(
+        m.hook && m.goal && m.next,
+        `${name} ${state}: goal and next step shown and equal to the hook`,
+      );
+      check(
+        m.font >= 14 && m.inView && m.overlaps === 0,
+        `${name} ${state}: guide ${m.font}px, in view ${m.inView}, overlaps ${m.overlaps}`,
+      );
+      if (name === 'portrait')
+        check(m.quick === 4 && m.quickInView, `${name} ${state}: quick controls on screen`);
     }
-    check(states.welcome.target==='welcome'&&states.scene.target==='answer','first steps point at the welcome button and the answer');
-    check(states.low.target==='motor-full'&&/Motor 100%/.test(states.low.next),`${name}: LOW asks for the motor (${states.low.next})`);
-    check(states.stall.target==='down'&&/nose down/.test(states.stall.next)&&states.stall.next2,`${name}: a stall asks for nose down`);
-    out[name]=Object.fromEntries(Object.entries(states).map(([k,m])=>[k,m.next]));
+    check(
+      states.welcome.target === 'welcome' && states.scene.target === 'answer',
+      'first steps point at the welcome button and the answer',
+    );
+    check(
+      states.low.target === 'motor-full' && /Motor 100%/.test(states.low.next),
+      `${name}: LOW asks for the motor (${states.low.next})`,
+    );
+    check(
+      states.stall.target === 'down' && /nose down/.test(states.stall.next) && states.stall.next2,
+      `${name}: a stall asks for nose down`,
+    );
+    out[name] = Object.fromEntries(Object.entries(states).map(([k, m]) => [k, m.next]));
     await ctx.close();
   }
   // Every branch of the next step in the laboratory: start, flying, a hard landing.
-  const ctx=await browser.newContext({viewport:{width:375,height:812},deviceScaleFactor:1,isMobile:true,hasTouch:true});
-  const page=await ctx.newPage();track(page);await ready(page,origin+'/');
-  await page.getByRole('button',{name:'Open the flight laboratory instead'}).tap();
-  const start=await measure(page);check(/Start flying/.test(start.next)&&start.target==='toggle','lab: start flying first');
-  await pitch(page,-10);await page.locator('#toggle').tap();await page.clock.runFor(30000);
-  const hard=await measure(page);check(/Hard landing/.test(hard.next)&&hard.hook,'lab: a hard landing says what to change');
-  out.lab={start:start.next,hard:hard.next};await ctx.close();
+  const ctx = await browser.newContext({
+    viewport: { width: 375, height: 812 },
+    deviceScaleFactor: 1,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await ctx.newPage();
+  track(page);
+  await ready(page, origin + '/');
+  await page.getByRole('button', { name: 'Open the flight laboratory instead' }).tap();
+  const start = await measure(page);
+  check(/Start flying/.test(start.next) && start.target === 'toggle', 'lab: start flying first');
+  await pitch(page, -10);
+  await page.locator('#toggle').tap();
+  await page.clock.runFor(30000);
+  const hard = await measure(page);
+  check(/Hard landing/.test(hard.next) && hard.hook, 'lab: a hard landing says what to change');
+  out.lab = { start: start.next, hard: hard.next };
+  await ctx.close();
   return out;
 }
-run().catch(error=>{console.error(error);process.exitCode=1}).finally(async()=>{if(browser)await browser.close();server.close()});
+run()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    if (browser) await browser.close();
+    server.close();
+  });
 
 // The pitch laboratory (src/pitch_lab.c): real sliders and buttons, the C numbers on screen, readable on phones and PCs.
-async function pitchLabCheck(browser,origin,track) {
-  const out={};
-  const lab=page=>page.evaluate(()=>window.pitchLab.snapshot);
-  for(const [name,viewport] of [['desktop',{width:1440,height:1000}],['laptop',{width:1024,height:768}],['portrait',{width:390,height:844}],['landscape',{width:844,height:390}]]) {
-    const phone=name==='portrait'||name==='landscape';
-    const ctx=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:phone,hasTouch:phone});
-    const page=await ctx.newPage();track(page);await ready(page,origin+'/');
-    await page.waitForFunction(()=>window.pitchLab?.snapshot);
-    if(!(await page.locator('#welcome').isHidden()))await page.getByRole('button',{name:'Open the flight laboratory instead'}).click();
-    await page.locator('#pitch-lab').scrollIntoViewIfNeeded();
-    const sizes=await page.evaluate(()=>{
-      const root=document.getElementById('pitch-lab');
-      const texts=[...root.querySelectorAll('*')].filter(el=>[...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())&&el.getClientRects().length);
-      const targets=[...root.querySelectorAll('button,input')].map(el=>el.getBoundingClientRect()).map(r=>Math.min(r.width,r.height));
-      const canvases=[...root.querySelectorAll('canvas')].map(c=>c.getBoundingClientRect()).map(r=>({w:r.width,h:r.height}));
-      return {font:Math.min(...texts.map(el=>parseFloat(getComputedStyle(el).fontSize))),target:Math.min(...targets),
-        overflow:document.documentElement.scrollWidth>innerWidth,canvas:Math.min(...canvases.map(c=>c.w))};
+async function pitchLabCheck(browser, origin, track) {
+  const out = {};
+  const lab = (page) => page.evaluate(() => window.pitchLab.snapshot);
+  for (const [name, viewport] of [
+    ['desktop', { width: 1440, height: 1000 }],
+    ['laptop', { width: 1024, height: 768 }],
+    ['portrait', { width: 390, height: 844 }],
+    ['landscape', { width: 844, height: 390 }],
+  ]) {
+    const phone = name === 'portrait' || name === 'landscape';
+    const ctx = await browser.newContext({
+      viewport,
+      deviceScaleFactor: 1,
+      isMobile: phone,
+      hasTouch: phone,
     });
-    check(sizes.font>=14&&sizes.target>=44&&!sizes.overflow&&sizes.canvas>=200,`${name}: pitch lab text ${sizes.font}px, targets ${sizes.target}px, overflow ${sizes.overflow}, canvas ${sizes.canvas}px`);
-    let snap=await lab(page);
-    check(snap.oscillatory===1&&Math.abs(snap.spWn-4.19408)<1e-4&&!snap.unstable,`${name}: default margin shows two oscillations (${snap.spWn})`);
-    check((await page.locator('#pl-sp').textContent()).startsWith(snap.spWn.toFixed(3)),`${name}: short-period readout is the C value`);
-    const press=id=>phone?page.locator(id).tap():page.locator(id).click();
-    await press('#pl-step');await page.clock.runFor(12600);
-    snap=await lab(page);
-    check(!snap.running&&Math.abs(snap.time-12)<1e-6&&Math.abs(snap.alpha-snap.trimAlpha)<.3&&snap.samples>500,`${name}: elevator step settles near the moment balance (${snap.alpha} vs ${snap.trimAlpha})`);
-    if(name==='desktop'||name==='portrait')await page.locator('#pitch-lab').screenshot({path:`docs/images/pitch-lab-${name}.jpg`,type:'jpeg',quality:88});
+    const page = await ctx.newPage();
+    track(page);
+    await ready(page, origin + '/');
+    await page.waitForFunction(() => window.pitchLab?.snapshot);
+    if (!(await page.locator('#welcome').isHidden()))
+      await page.getByRole('button', { name: 'Open the flight laboratory instead' }).click();
+    await page.locator('#pitch-lab').scrollIntoViewIfNeeded();
+    const sizes = await page.evaluate(() => {
+      const root = document.getElementById('pitch-lab');
+      const texts = [...root.querySelectorAll('*')].filter(
+        (el) =>
+          [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) &&
+          el.getClientRects().length,
+      );
+      const targets = [...root.querySelectorAll('button,input')]
+        .map((el) => el.getBoundingClientRect())
+        .map((r) => Math.min(r.width, r.height));
+      const canvases = [...root.querySelectorAll('canvas')]
+        .map((c) => c.getBoundingClientRect())
+        .map((r) => ({ w: r.width, h: r.height }));
+      return {
+        font: Math.min(...texts.map((el) => parseFloat(getComputedStyle(el).fontSize))),
+        target: Math.min(...targets),
+        overflow: document.documentElement.scrollWidth > innerWidth,
+        canvas: Math.min(...canvases.map((c) => c.w)),
+      };
+    });
+    check(
+      sizes.font >= 14 && sizes.target >= 44 && !sizes.overflow && sizes.canvas >= 200,
+      `${name}: pitch lab text ${sizes.font}px, targets ${sizes.target}px, overflow ${sizes.overflow}, canvas ${sizes.canvas}px`,
+    );
+    let snap = await lab(page);
+    check(
+      snap.oscillatory === 1 && Math.abs(snap.spWn - 4.19408) < 1e-4 && !snap.unstable,
+      `${name}: default margin shows two oscillations (${snap.spWn})`,
+    );
+    check(
+      (await page.locator('#pl-sp').textContent()).startsWith(snap.spWn.toFixed(3)),
+      `${name}: short-period readout is the C value`,
+    );
+    const press = (id) => (phone ? page.locator(id).tap() : page.locator(id).click());
+    await press('#pl-step');
+    await page.clock.runFor(12600);
+    snap = await lab(page);
+    check(
+      !snap.running &&
+        Math.abs(snap.time - 12) < 1e-6 &&
+        Math.abs(snap.alpha - snap.trimAlpha) < 0.3 &&
+        snap.samples > 500,
+      `${name}: elevator step settles near the moment balance (${snap.alpha} vs ${snap.trimAlpha})`,
+    );
+    if (name === 'desktop' || name === 'portrait')
+      await page
+        .locator('#pitch-lab')
+        .screenshot({ path: `docs/images/pitch-lab-${name}.jpg`, type: 'jpeg', quality: 88 });
     await page.locator('#pl-margin').fill('-0.05');
-    snap=await lab(page);
-    check(snap.unstable&&snap.lambda>.3&&/Diverges/.test(snap.verdict),`${name}: behind the neutral point the verdict is divergence (${snap.lambda})`);
-    await press('#pl-kick');await page.clock.runFor(12600);
-    snap=await lab(page);
-    check(snap.departed===1&&!snap.running,`${name}: the unstable glider departs (${snap.status})`);
-    if(name==='desktop')await page.locator('#pitch-lab').screenshot({path:'docs/images/pitch-lab-diverge.jpg',type:'jpeg',quality:88});
+    snap = await lab(page);
+    check(
+      snap.unstable && snap.lambda > 0.3 && /Diverges/.test(snap.verdict),
+      `${name}: behind the neutral point the verdict is divergence (${snap.lambda})`,
+    );
+    await press('#pl-kick');
+    await page.clock.runFor(12600);
+    snap = await lab(page);
+    check(
+      snap.departed === 1 && !snap.running,
+      `${name}: the unstable glider departs (${snap.status})`,
+    );
+    if (name === 'desktop')
+      await page
+        .locator('#pitch-lab')
+        .screenshot({ path: 'docs/images/pitch-lab-diverge.jpg', type: 'jpeg', quality: 88 });
     await press('#pl-reset');
-    out[name]={...sizes,departAt:+snap.time.toFixed(2)};
+    out[name] = { ...sizes, departAt: +snap.time.toFixed(2) };
     await ctx.close();
   }
   return out;
