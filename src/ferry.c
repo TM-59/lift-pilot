@@ -21,7 +21,8 @@
 #define RIDGE_CLIMB 15.0    /* FE_ROUTE: the climb-out along the slope ends this much higher [m] */
 #define ORCHARD_CHARGE 15.0 /* FE_ORCHARD: Ros's solar panels, s of full throttle */
 #define VALLEY_WIND (-4.0)  /* FE_WIND: the valley wind on the nose, hops 4 and 5 [m/s] */
-#define CLEAN_CD0 0.0130 /* FE_MOTOR: no motor pylon or folded propeller, gaps taped (from 0.015)  \
+#define CLEAN_CD0                                                                                  \
+    0.0130               /* FE_MOTOR: no motor pylon or folded propeller, gaps taped (from 0.015)  \
                           */
 #define WINCH_H 160.0    /* FE_MOTOR: the mill's winch launch [m] */
 #define SEA_LIFT (-0.25) /* FE_DOORS: the sea breeze sinks the air on the last hop [m/s] */
@@ -55,8 +56,9 @@ static double energy_height(const State *s)
 
 double ferry_need(const Ferry *f)
 {
-    if (f->hop >= F_HOPS || f->state.x >= f->strip)
+    if (f->hop >= F_HOPS || f->state.x >= f->strip) {
         return 0.0;
+    }
     double aim = f->strip + F_AIM - f->state.x;
     return aim / fmax(energy_height(&f->state), 0.1);
 }
@@ -71,18 +73,21 @@ int ferry_low_on(const Ferry *f)
  * climb, or no loss, reads 60). */
 static double glide_step(double dx, double de)
 {
-    if (dx <= 0.0)
+    if (dx <= 0.0) {
         return 0.0;
-    if (-de <= dx / F_GLIDE_CAP)
+    }
+    if (-de <= dx / F_GLIDE_CAP) {
         return F_GLIDE_CAP;
+    }
     return dx / -de;
 }
 
 static void open_scene(Ferry *f, int scene)
 {
     f->scene = scene;
-    if (f->order_len < FS_COUNT)
+    if (f->order_len < FS_COUNT) {
         f->order[f->order_len++] = scene;
+    }
     if (ferry_heavy(scene)) {
         f->banner = FB_NONE;
         f->banner_left = 0.0;
@@ -93,8 +98,9 @@ static void raise_banner(Ferry *f, int banner)
 {
     f->banner = banner;
     f->banner_left = 2.0;
-    if (banner == FB_CLEAR)
+    if (banner == FB_CLEAR) {
         f->loud++;
+    }
 }
 
 /* The top of the climb-out (or of the winch launch): a trimmed 4 degree glide, the strip ahead. */
@@ -120,15 +126,18 @@ static void start_hop(Ferry *f)
     f->lift = f->wind = 0.0;
     if (h == 1 && f->route >= 0 && on(f, FE_ROUTE)) {
         f->strip = f->route == 0 ? QUARRY_STRIP : RIDGE_STRIP;
-        if (f->route == 0)
+        if (f->route == 0) {
             f->lift = QUARRY_LIFT;
-        else
+        } else {
             f->start_h += RIDGE_CLIMB;
+        }
     }
-    if (h >= 3 && on(f, FE_WIND))
+    if (h >= 3 && on(f, FE_WIND)) {
         f->wind = VALLEY_WIND;
-    if (h >= 3 && !f->motor)
+    }
+    if (h >= 3 && !f->motor) {
         f->start_h = WINCH_H;
+    }
     if (h == 4 && on(f, FE_DOORS)) {
         f->lift = SEA_LIFT;
         f->wind += SEA_WIND;
@@ -159,8 +168,9 @@ static void clear_hop(Ferry *f, int made)
     int scene = next[f->hop];
     f->hop++;
     /* The heavy scenes and the ending get the screen to themselves: no "strip made" banner. */
-    if (made && !ferry_heavy(scene) && scene != FS_COAST)
+    if (made && !ferry_heavy(scene) && scene != FS_COAST) {
         raise_banner(f, FB_CLEAR);
+    }
     open_scene(f, scene);
 }
 
@@ -184,14 +194,18 @@ static void outland(Ferry *f)
 
 void ferry_tick(Ferry *f, int frames, double command_degrees, double throttle)
 {
-    if (frames < 0 || f->scene != FS_NONE || f->hop >= F_HOPS)
+    if (frames < 0 || f->scene != FS_NONE || f->hop >= F_HOPS) {
         return;
-    if (frames > 250)
+    }
+    if (frames > 250) {
         frames = 250;
-    if (!isfinite(command_degrees))
+    }
+    if (!isfinite(command_degrees)) {
         command_degrees = 4.0;
-    if (!isfinite(throttle))
+    }
+    if (!isfinite(throttle)) {
         throttle = 0.0;
+    }
     double cmd = fmax(-10.0, fmin(20.0, command_degrees)) * DEG;
     throttle = fmax(0.0, fmin(1.0, throttle));
     for (int k = 0; k < frames && f->scene == FS_NONE && f->hop < F_HOPS; k++) {
@@ -209,30 +223,34 @@ void ferry_tick(Ferry *f, int frames, double command_degrees, double throttle)
         f->time += F_DT;
         f->hop_time += F_DT;
         f->frames++;
-        if (f->banner_left > 0.0 && (f->banner_left -= F_DT) <= 0.0)
+        if (f->banner_left > 0.0 && (f->banner_left -= F_DT) <= 0.0) {
             f->banner = FB_NONE;
+        }
         if (ferry_low_on(f)) {
             f->low += F_DT;
             f->crisis_hop[f->hop] = 1;
         }
         Status st = check_touchdown(&f->state);
-        if (st == LANDED && f->state.x >= f->strip && f->state.x <= f->strip + f->length)
+        if (st == LANDED && f->state.x >= f->strip && f->state.x <= f->strip + f->length) {
             clear_hop(f, 1);
-        else if (st != FLYING || f->hop_time > HOP_LIMIT)
+        } else if (st != FLYING || f->hop_time > HOP_LIMIT) {
             outland(f);
+        }
     }
 }
 
 int ferry_answer(Ferry *f, int option)
 {
     int scene = f->scene;
-    if (scene == FS_NONE || option < 0 || option >= ferry_options(scene))
+    if (scene == FS_NONE || option < 0 || option >= ferry_options(scene)) {
         return 1;
+    }
     f->scene = FS_NONE;
     switch (scene) {
     case FS_HANGAR:
-        if (on(f, FE_CELLS))
+        if (on(f, FE_CELLS)) {
             f->charge = CELLS_CHARGE;
+        }
         start_hop(f);
         break;
     case FS_WEIR:
@@ -240,8 +258,9 @@ int ferry_answer(Ferry *f, int option)
         start_hop(f);
         break;
     case FS_ORCHARD:
-        if (on(f, FE_ORCHARD))
+        if (on(f, FE_ORCHARD)) {
             f->charge += ORCHARD_CHARGE;
+        }
         open_scene(f, FS_BUYER);
         break;
     case FS_BUYER:

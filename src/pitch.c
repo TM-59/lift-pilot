@@ -103,8 +103,9 @@ void pitch_jacobian(const PitchAircraft *p, const PitchState *trim, double eleva
         *slot(&down, j) -= eps;
         pitch_derivative(p, &up, elevator, 0.0, &du);
         pitch_derivative(p, &down, elevator, 0.0, &dd);
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 4; i++) {
             a[i][j] = (*slot(&du, i) - *slot(&dd, i)) / (2.0 * eps);
+        }
     }
 }
 
@@ -114,47 +115,59 @@ void pitch_eigen(double a[4][4], double re[4], double im[4])
      * + c[4]. */
     double m[4][4] = {{0}}, am[4][4], c[5] = {1.0, 0, 0, 0, 0};
     for (int k = 1; k <= 4; k++) {
-        for (int i = 0; i < 4; i++)
-            for (int j = 0; j < 4; j++)
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
                 m[i][j] += (i == j) * c[k - 1];
+            }
+        }
         double tr = 0.0;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
                 am[i][j] = 0.0;
-                for (int l = 0; l < 4; l++)
+                for (int l = 0; l < 4; l++) {
                     am[i][j] += a[i][l] * m[l][j];
+                }
             }
-        for (int i = 0; i < 4; i++)
+        }
+        for (int i = 0; i < 4; i++) {
             tr += am[i][i];
+        }
         c[k] = -tr / k;
-        for (int i = 0; i < 4; i++)
-            for (int j = 0; j < 4; j++)
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
                 m[i][j] = am[i][j];
+            }
+        }
     }
     /* Durand-Kerner on the monic quartic. */
     double complex z[4], start = 0.4 + 0.9 * I;
     double radius = 1.0;
-    for (int k = 1; k <= 4; k++)
+    for (int k = 1; k <= 4; k++) {
         radius = fmax(radius, pow(fabs(c[k]), 1.0 / k));
-    for (int i = 0; i < 4; i++)
+    }
+    for (int i = 0; i < 4; i++) {
         z[i] = radius * cpow(start, i);
+    }
     for (int it = 0; it < 500; it++) {
         double change = 0.0;
         for (int i = 0; i < 4; i++) {
             double complex num = ((((z[i] + c[1]) * z[i] + c[2]) * z[i] + c[3]) * z[i] + c[4]),
                            den = 1.0;
-            for (int j = 0; j < 4; j++)
-                if (j != i)
+            for (int j = 0; j < 4; j++) {
+                if (j != i) {
                     den *= z[i] - z[j];
+                }
+            }
             double complex step = num / den;
             z[i] -= step;
             change = fmax(change, cabs(step) / fmax(1.0, cabs(z[i])));
         }
-        if (change < 1e-15)
+        if (change < 1e-15) {
             break;
+        }
     }
     /* Sort by modulus, largest first; within a pair put the positive imaginary part first. */
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 4; i++) {
         for (int j = i + 1; j < 4; j++) {
             double ai = cabs(z[i]), aj = cabs(z[j]);
             if (aj > ai * (1.0 + 1e-9) ||
@@ -164,6 +177,7 @@ void pitch_eigen(double a[4][4], double re[4], double im[4])
                 z[j] = t;
             }
         }
+    }
     for (int i = 0; i < 4; i++) {
         re[i] = creal(z[i]);
         im[i] = fabs(cimag(z[i])) < 1e-12 * fmax(1.0, cabs(z[i])) ? 0.0 : cimag(z[i]);

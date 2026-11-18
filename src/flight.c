@@ -22,8 +22,9 @@ Aircraft glider_default(void)
 double lift_coeff(const Aircraft *a, double alpha)
 {
     double cl_stall = a->cl0 + a->cl_alpha * a->alpha_stall;
-    if (alpha <= a->alpha_stall)
+    if (alpha <= a->alpha_stall) {
         return a->cl0 + a->cl_alpha * alpha;
+    }
     double cl = cl_stall * (1.0 - 3.0 * (alpha - a->alpha_stall));
     return cl > 0.3 * cl_stall ? cl : 0.3 * cl_stall;
 }
@@ -32,8 +33,9 @@ double drag_coeff(const Aircraft *a, double alpha)
 {
     double cl = lift_coeff(a, alpha);
     double cd = a->cd0 + a->k * cl * cl;
-    if (alpha > a->alpha_stall)
+    if (alpha > a->alpha_stall) {
         cd += 10.0 * (alpha - a->alpha_stall) * (alpha - a->alpha_stall);
+    }
     return cd;
 }
 
@@ -97,8 +99,9 @@ void flight_step(const Aircraft *a, State *s, double alpha_cmd, double throttle,
 
 Status check_touchdown(State *s)
 {
-    if (s->h > 0.0)
+    if (s->h > 0.0) {
         return FLYING;
+    }
     double sink = -s->v * sin(s->gamma);
     s->h = 0.0;
     return sink < 2.0 && fabs(s->gamma) < 0.15 ? LANDED : CRASHED;

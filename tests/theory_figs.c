@@ -160,16 +160,18 @@ static void fig_energy(void)
     double rate_theory = -drag_force(&a, &s) * s.v / a.mass;
     int n = 151;
     for (int i = 0; i < n; i++) {
-        if (i)
+        if (i) {
             for (int k = 0; k < 10; k++) {
                 flight_step(&a, &s, 4.0 * DEG, 0.0, 0.02);
                 flight_step(&clean, &c, 5.0 * DEG, 0.0, 0.02);
             }
+        }
         xs[i] = (float)(0.2 * i);
         ya[i] = (float)((specific_energy(&s) - e0) / GRAVITY);
         yb[i] = (float)((specific_energy(&c) - c0) / GRAVITY);
-        if (fabs(specific_energy(&c) / c0 - 1.0) > worst)
+        if (fabs(specific_energy(&c) / c0 - 1.0) > worst) {
             worst = fabs(specific_energy(&c) / c0 - 1.0);
+        }
     }
     value("energy-no-drag",
           "largest relative change of V^2/2 + g h over 30 s with CD = 0 and no thrust (ideal 0)",
@@ -195,17 +197,20 @@ static void fig_phugoid(void)
     double prev = s.v, prev2 = s.v, t_min = -1.0, period = -1.0, h0 = s.h,
            sink = -ve * sin(-atan2(drag_coeff(&a, 4.0 * DEG), lift_coeff(&a, 4.0 * DEG)));
     for (int i = 0; i < n; i++) {
-        if (i)
+        if (i) {
             for (int k = 0; k < 10; k++) {
                 flight_step(&a, &s, 4.0 * DEG, 0.0, 0.02);
                 double t = 0.2 * (i - 1) + 0.02 * (k + 1);
-                if (t_min < 0.0 && prev < prev2 && prev < s.v)
+                if (t_min < 0.0 && prev < prev2 && prev < s.v) {
                     t_min = t - 0.02;
-                if (t_min > 0.0 && period < 0.0 && prev > prev2 && prev >= s.v)
+                }
+                if (t_min > 0.0 && period < 0.0 && prev > prev2 && prev >= s.v) {
                     period = 2.0 * (t - 0.02 - t_min);
+                }
                 prev2 = prev;
                 prev = s.v;
             }
+        }
         xs[i] = (float)(0.2 * i);
         ya[i] = (float)(s.v - ve);
         yb[i] = (float)((s.h - h0 + sink * 0.2 * i) /
@@ -228,14 +233,16 @@ static void fig_lag(void)
     int n = 101;
     double at_tau = 0.0;
     for (int i = 0; i < n; i++) {
-        if (i)
+        if (i) {
             flight_step(&a, &s, 8.0 * DEG, 0.0, 0.02);
+        }
         double t = 0.02 * i;
         xs[i] = (float)t;
         ya[i] = (float)(s.alpha / DEG);
         yb[i] = (float)(8.0 - 4.0 * exp(-t / a.tau));
-        if (i == 12)
+        if (i == 12) {
             at_tau = s.alpha / DEG; /* t = 0.24 s, the frame nearest to tau = 0.25 s */
+        }
     }
     value("lag-at-0.24s",
           "angle of attack 0.24 s after a 4 -> 8 deg command (theory 8 - 4 exp(-0.24 / 0.25)), deg",
@@ -253,8 +260,9 @@ static State after_20s(double dt)
     trim_glide(&a, 4.0 * DEG, &s);
     s.v *= 1.1;
     int steps = (int)(20.0 / dt + 0.5);
-    for (int k = 0; k < steps; k++)
+    for (int k = 0; k < steps; k++) {
         flight_step(&a, &s, 4.0 * DEG, 0.0, dt);
+    }
     return s;
 }
 
@@ -328,8 +336,9 @@ static double ferry_glide(double wind, double lift, float *trace, int *count)
         ferry_tick(&f, 10, 4.0, 0.0);
         n++;
     }
-    if (count)
+    if (count) {
         *count = n;
+    }
     return ferry_value(&f, FV_X);
 }
 
@@ -343,8 +352,9 @@ static void fig_air(void)
     int n = 0, m = 0;
     static float still[MAXN];
     double d0 = ferry_glide(0.0, 0.0, still, &n);
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++) {
         ya[i] = still[i];
+    }
     double d1 = ferry_glide(-3.0, 0.0, NULL, NULL), d2 = ferry_glide(0.0, -0.5, NULL, NULL);
     /* headwind and sink traces on the same x grid as the still-air run: h(x) is a straight line in
      * each case */
@@ -479,20 +489,23 @@ static void fig_pitch_trim(void)
     double e0 = 0.5 * c.v * c.v + GRAVITY * c.h, worst_e = 0.0;
     int n = 151;
     for (int i = 0; i < n; i++) {
-        if (i)
+        if (i) {
             for (int k = 0; k < 10; k++) {
                 pitch_step(&p, &s, de, 0.0, 0.02);
                 pitch_step(&clean, &c, 0.0, 0.0, 0.02);
             }
+        }
         double e = 0.5 * c.v * c.v + GRAVITY * c.h;
         xs[i] = (float)(0.2 * i);
         ya[i] = (float)(c.theta / DEG);
         yb[i] = (float)((c.theta - c.gamma) / DEG);
         yc[i] = (float)((e - e0) / GRAVITY * 1e6);
-        if (fabs(pitch_alpha(&s) - PM_ALPHA) > worst_a)
+        if (fabs(pitch_alpha(&s) - PM_ALPHA) > worst_a) {
             worst_a = fabs(pitch_alpha(&s) - PM_ALPHA);
-        if (fabs(e / e0 - 1.0) > worst_e)
+        }
+        if (fabs(e / e0 - 1.0) > worst_e) {
             worst_e = fabs(e / e0 - 1.0);
+        }
     }
     value("pitch-trim-drift",
           "largest change of alpha over 30 s of the trimmed rigid-body glide, rad (ideal 0)",
@@ -573,8 +586,9 @@ static void fig_root_locus(void)
                 blue = (int)(40 + 140 * i / 80.0);
             for (int j = 0; j < 4; j++) {
                 double x = zx + re[j] * sx, y = zy - im[j] * sy;
-                if (x < pan[k].l || x > pan[k].r || y < T || y > B)
+                if (x < pan[k].l || x > pan[k].r || y < T || y > B) {
                     continue;
+                }
                 fprintf(f, "<circle cx=\"%.1f\" cy=\"%.1f\" r=\"%s\" fill=\"rgb(%d,%d,%d)\"/>\n", x,
                         y, i == 50 ? "4.5" : "2", red, green, blue);
             }
@@ -586,8 +600,9 @@ static void fig_root_locus(void)
             (T + B) / 2, (T + B) / 2);
     fprintf(f, "<text x=\"60\" y=\"392\" fill=\"#222\">large dots: the default, static margin "
                "0.15</text>\n</svg>\n");
-    if (fclose(f) != 0)
+    if (fclose(f) != 0) {
         exit(1);
+    }
     PitchAircraft p = pitch_default();
     PitchMode sp, ph;
     int two = pitch_modes(&p, PM_ALPHA, &sp, &ph);
@@ -705,9 +720,11 @@ static void fig_sp_response(void)
     double amp = 0.01; /* the start is 0.01 x Re(v) with v_q = 1: q(t) = 0.01 exp(re t) cos(im t) */
     int n = 201;
     for (int i = 0; i < n; i++) {
-        if (i)
-            for (int k = 0; k < 5; k++)
+        if (i) {
+            for (int k = 0; k < 5; k++) {
                 pitch_step(&p, &s, de, 0.0, 0.002);
+            }
+        }
         double t = 0.01 * i;
         xs[i] = (float)t;
         ya[i] = (float)(s.q / DEG);
@@ -740,16 +757,19 @@ static void fig_elevator_step(void)
     double step = de - 1.0 * DEG, target = pitch_trim_alpha(&p, step);
     int n = 401;
     for (int i = 0; i < n; i++) {
-        if (i)
-            for (int k = 0; k < 5; k++)
+        if (i) {
+            for (int k = 0; k < 5; k++) {
                 pitch_step(&p, &s, step, 0.0, 0.02);
+            }
+        }
         xs[i] = (float)(0.1 * i);
         ya[i] = (float)(pitch_alpha(&s) / DEG);
         yb[i] = (float)(target / DEG);
         yc[i] = (float)(s.v / 5.0);
     }
-    for (int k = 0; k < 150000 - 20000; k++)
+    for (int k = 0; k < 150000 - 20000; k++) {
         pitch_step(&p, &s, step, 0.0, 0.02);
+    }
     value("step-alpha",
           "angle of attack 3000 s after a 1 deg nose-up step, deg (theory -(Cm0 + Cmde de) / "
           "Cmalpha)",
@@ -774,25 +794,31 @@ static void fig_divergence(void)
     PitchState s = pm_trimmed(&p, &de);
     pitch_jacobian(&p, &s, de, a);
     pitch_eigen(a, re, im);
-    for (int i = 0; i < 4; i++)
-        if (im[i] == 0.0 && re[i] > lambda)
+    for (int i = 0; i < 4; i++) {
+        if (im[i] == 0.0 && re[i] > lambda) {
             lambda = re[i];
+        }
+    }
     double a0 = pitch_alpha(&s);
     s.theta += 1e-5;
     int n = 161;
     double ref = 0.0;
     for (int i = 0; i < n; i++) {
-        if (i)
-            for (int k = 0; k < 50; k++)
+        if (i) {
+            for (int k = 0; k < 50; k++) {
                 pitch_step(&p, &s, de, 0.0, 0.002);
+            }
+        }
         double t = 0.1 * i, d = fabs(pitch_alpha(&s) - a0);
-        if (i == 100)
+        if (i == 100) {
             ref = log10(d) - lambda * t / log(10.0);
+        }
         xs[i] = (float)t;
         ya[i] = (float)log10(d);
     }
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++) {
         yb[i] = (float)(ref + lambda * xs[i] / log(10.0));
+    }
     value("diverge-lambda", "positive real eigenvalue at SM -0.05, 1/s (reported)", lambda, lambda);
     value("diverge-rate",
           "growth rate of the simulated alpha disturbance between 10 s and 16 s, 1/s (theory: the "
@@ -807,8 +833,9 @@ static void fig_divergence(void)
         pitch_jacobian(&q, &t, de, b);
         pitch_eigen(b, r, m);
         double complex det = 1.0;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 4; i++) {
             det *= r[i] + m[i] * I;
+        }
         value(k ? "det-minus" : "det-plus",
               k ? "product of the eigenvalues (det A) at SM -0.05, 1/s^4 (theory: negative)"
                 : "product of the eigenvalues (det A) at SM 0.05, 1/s^4 (theory: positive)",
@@ -902,8 +929,9 @@ int main(int argc, char **argv)
     fig_elevator_step();
     fig_divergence();
     fig_pitch_rk4();
-    if (fclose(values) != 0)
+    if (fclose(values) != 0) {
         return 1;
+    }
     printf("theory figures written to %s\n", dir);
     return 0;
 }

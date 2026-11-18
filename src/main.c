@@ -30,8 +30,9 @@ static int headless(const char *dir)
     char path[512];
     snprintf(path, sizeof path, "%s/run.csv", dir);
     FILE *csv = fopen(path, "w");
-    if (!csv)
+    if (!csv) {
         return 1;
+    }
     fprintf(csv, "t,x,h,v,gamma,alpha\n");
     for (int k = 0; k < N; k++) {
         if (k % STRIDE == 0) {
@@ -50,12 +51,14 @@ static int headless(const char *dir)
     snprintf(path, sizeof path, "%s/speed.svg", dir);
     Series sp[] = {{"airspeed V [m/s]", v, "#1f77b4"}};
     if (svg_plot(path, "Phugoid: airspeed after a +10% disturbance", "t [s]", "V [m/s]", t, M, sp,
-                 1))
+                 1)) {
         return 1;
+    }
     snprintf(path, sizeof path, "%s/track.svg", dir);
     Series tr[] = {{"altitude h [m]", hh, "#2ca02c"}};
-    if (svg_plot(path, "Flight path (altitude vs distance)", "x [m]", "h [m]", xx, M, tr, 1))
+    if (svg_plot(path, "Flight path (altitude vs distance)", "x [m]", "h [m]", xx, M, tr, 1)) {
         return 1;
+    }
 
     enum { P = 60 };
     static float al[P], cl[P], cd[P], ld[P], cdx[P];
@@ -69,12 +72,15 @@ static int headless(const char *dir)
     }
     snprintf(path, sizeof path, "%s/polar.svg", dir);
     Series po[] = {{"CL", cl, "#d62728"}};
-    if (svg_plot(path, "Drag polar (CL vs CD)", "CD", "CL", cdx, P, po, 1))
+    if (svg_plot(path, "Drag polar (CL vs CD)", "CD", "CL", cdx, P, po, 1)) {
         return 1;
+    }
     snprintf(path, sizeof path, "%s/ld.svg", dir);
     Series lr[] = {{"L/D", ld, "#9467bd"}};
-    if (svg_plot(path, "Lift-to-drag ratio vs angle of attack", "alpha [deg]", "L/D", al, P, lr, 1))
+    if (svg_plot(path, "Lift-to-drag ratio vs angle of attack", "alpha [deg]", "L/D", al, P, lr,
+                 1)) {
         return 1;
+    }
     printf("best L/D %.1f, trim V %.1f m/s\n", best_glide_ratio(&a), s.v);
     return 0;
 }
@@ -95,8 +101,9 @@ static int pitch_chart(const char *path)
         double elevator = pitch_trim_elevator(&p, deg(4.0)) - deg(1.0),
                target = pitch_trim_alpha(&p, elevator);
         for (int i = 0; i < N; i++) {
-            if (i)
+            if (i) {
                 pitch_step(&p, &s, elevator, 0.0, 0.016);
+            }
             t[i] = (float)(0.016 * i);
             al[m][i] = (float)(pitch_alpha(&s) * 180.0 / 3.14159265358979);
             steady[m][i] = (float)(target * 180.0 / 3.14159265358979);
@@ -122,20 +129,24 @@ static int snapshot(void)
     State s = {0.0, 300.0, 0.0, 0.0, 0.0};
     trim_glide(&a, deg(4.0), &s);
     static char buf[RENDER_COLS * RENDER_ROWS * 4];
-    if (!render_frame(&a, &s, RUNWAY_X, buf, sizeof buf))
+    if (!render_frame(&a, &s, RUNWAY_X, buf, sizeof buf)) {
         return 1;
+    }
     fputs(buf, stdout);
     return 0;
 }
 
 static int gif_colour(char c)
 {
-    if (c == '=')
+    if (c == '=') {
         return 2;
-    if (c == '>' || c == '/' || c == '\\')
+    }
+    if (c == '>' || c == '/' || c == '\\') {
         return 3;
-    if (c == '_' || c == '|')
+    }
+    if (c == '_' || c == '|') {
         return 4;
+    }
     return 1;
 }
 
@@ -160,15 +171,17 @@ static int gif_demo(const char *path)
     int w = RENDER_COLS * 6 * 3, h = RENDER_ROWS * 9 * 3;
     static unsigned char px[RENDER_COLS * 6 * 3 * RENDER_ROWS * 9 * 3];
     Gif *g = gif_open(path, w, h, pal, 6);
-    if (!g)
+    if (!g) {
         return 1;
+    }
     st = FLYING;
     for (int k = 0; st == FLYING; k++) {
         if (k % 50 == 0) {
             render_frame(&a, &s, runway_x, buf, sizeof buf);
             gif_draw_text(px, w, h, buf, 3, gif_colour);
-            if (gif_frame(g, px, 0))
+            if (gif_frame(g, px, 0)) {
                 return 1;
+            }
         }
         flight_step(&a, &s, deg(4.0), 0.0, DT);
         st = check_touchdown(&s);
@@ -176,8 +189,9 @@ static int gif_demo(const char *path)
     s.h = 0.0;
     render_frame(&a, &s, runway_x, buf, sizeof buf);
     gif_draw_text(px, w, h, buf, 3, gif_colour);
-    if (gif_frame(g, px, 200) || gif_close(g))
+    if (gif_frame(g, px, 200) || gif_close(g)) {
         return 1;
+    }
     printf("touchdown at x=%.0f m (runway %.0f..%.0f m)\n", s.x, runway_x, runway_x + 300.0);
     return 0;
 }
@@ -215,23 +229,31 @@ static int play(void)
     while (st == FLYING) {
         char c;
         while (read(STDIN_FILENO, &c, 1) == 1) {
-            if (c == 'q')
+            if (c == 'q') {
                 return 0;
-            if (c == 'w')
+            }
+            if (c == 'w') {
                 cmd += deg(1.0);
-            if (c == 's')
+            }
+            if (c == 's') {
                 cmd -= deg(1.0);
-            if (c == 'r')
+            }
+            if (c == 'r') {
                 throttle = fmin(1.0, throttle + 0.1);
-            if (c == 'f')
+            }
+            if (c == 'f') {
                 throttle = fmax(0.0, throttle - 0.1);
-            if (c == 'p')
+            }
+            if (c == 'p') {
                 paused = !paused;
+            }
         }
-        if (cmd > deg(20.0))
+        if (cmd > deg(20.0)) {
             cmd = deg(20.0);
-        if (cmd < deg(-10.0))
+        }
+        if (cmd < deg(-10.0)) {
             cmd = deg(-10.0);
+        }
         if (!paused) {
             for (int k = 0; k < 2 && st == FLYING; k++) {
                 flight_step(&a, &s, cmd, throttle, DT);
@@ -255,13 +277,17 @@ static int play(void)
 
 int main(int argc, char **argv)
 {
-    if (argc > 1 && strcmp(argv[1], "--headless") == 0)
+    if (argc > 1 && strcmp(argv[1], "--headless") == 0) {
         return headless(argc > 2 ? argv[2] : ".");
-    if (argc > 1 && strcmp(argv[1], "--snapshot") == 0)
+    }
+    if (argc > 1 && strcmp(argv[1], "--snapshot") == 0) {
         return snapshot();
-    if (argc > 1 && strcmp(argv[1], "--pitch") == 0)
+    }
+    if (argc > 1 && strcmp(argv[1], "--pitch") == 0) {
         return pitch_chart(argc > 2 ? argv[2] : "pitch.svg");
-    if (argc > 1 && strcmp(argv[1], "--gif") == 0)
+    }
+    if (argc > 1 && strcmp(argv[1], "--gif") == 0) {
         return gif_demo(argc > 2 ? argv[2] : "demo.gif");
+    }
     return play();
 }

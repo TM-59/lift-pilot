@@ -32,30 +32,36 @@ static void pm_short_period_vector(const PitchAircraft *p, double complex v[4])
     pitch_eigen(a, re, im);
     double complex lambda = re[0] + im[0] * I, m[3][4];
     for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++)
+        for (int j = 0; j < 3; j++) {
             m[i][j] = a[i][j] - (i == j ? lambda : 0.0);
+        }
         m[i][3] = -a[i][3]; /* right-hand side with v_q = 1 */
     }
     for (int c = 0; c < 3; c++) { /* Gauss-Jordan with partial pivoting */
         int piv = c;
-        for (int r = c + 1; r < 3; r++)
-            if (cabs(m[r][c]) > cabs(m[piv][c]))
+        for (int r = c + 1; r < 3; r++) {
+            if (cabs(m[r][c]) > cabs(m[piv][c])) {
                 piv = r;
+            }
+        }
         for (int j = 0; j < 4; j++) {
             double complex t = m[c][j];
             m[c][j] = m[piv][j];
             m[piv][j] = t;
         }
         for (int r = 0; r < 3; r++) {
-            if (r == c)
+            if (r == c) {
                 continue;
+            }
             double complex f = m[r][c] / m[c][c];
-            for (int j = c; j < 4; j++)
+            for (int j = c; j < 4; j++) {
                 m[r][j] -= f * m[c][j];
+            }
         }
     }
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < 3; i++) {
         v[i] = m[i][3] / m[i][i];
+    }
     v[3] = 1.0;
 }
 
@@ -91,8 +97,9 @@ static void pm_short_period_response(const PitchAircraft *p, double *wd, double 
         double qm = q1, qc = q2; /* q at steps k-2, k-1 */
         pitch_step(p, &s, de, 0.0, dt);
         double qn = s.q;
-        if (nz < 2 && qc != 0.0 && (qc > 0.0) != (qn > 0.0))
+        if (nz < 2 && qc != 0.0 && (qc > 0.0) != (qn > 0.0)) {
             zc[nz++] = (k - 1 + qc / (qc - qn)) * dt;
+        }
         if (np < 2 && k > 2 && ((qc > qm && qc >= qn) || (qc < qm && qc <= qn))) {
             double den = qm - 2.0 * qc + qn, off = den != 0.0 ? 0.5 * (qm - qn) / den : 0.0;
             pk[np++] = qc - 0.25 * (qm - qn) * off;
@@ -116,8 +123,9 @@ static double pm_growth_rate(const PitchAircraft *p, double t1, double t2)
     int n1 = (int)(t1 / dt + 0.5), n2 = (int)(t2 / dt + 0.5);
     for (int k = 1; k <= n2; k++) {
         pitch_step(p, &s, de, 0.0, dt);
-        if (k == n1)
+        if (k == n1) {
             d1 = pitch_alpha(&s) - a0;
+        }
     }
     return log(fabs((pitch_alpha(&s) - a0) / d1)) / (t2 - t1);
 }
@@ -140,15 +148,18 @@ static double pm_rk4_limit_measured(const PitchAircraft *p)
                 late = INFINITY;
                 break;
             }
-            if (k >= 1000 && k < 1200 && d > early)
+            if (k >= 1000 && k < 1200 && d > early) {
                 early = d;
-            if (k >= 3000 && d > late)
+            }
+            if (k >= 3000 && d > late) {
                 late = d;
+            }
         }
-        if (late > early)
+        if (late > early) {
             hi = dt;
-        else
+        } else {
             lo = dt;
+        }
     }
     return 0.5 * (lo + hi);
 }
@@ -163,10 +174,11 @@ static double pm_rk4_limit_theory(const PitchMode *sp)
         double dt = 0.5 * (lo + hi);
         double complex z = lambda * dt,
                        r = 1.0 + z + z * z / 2.0 + z * z * z / 6.0 + z * z * z * z / 24.0;
-        if (cabs(r) > 1.0)
+        if (cabs(r) > 1.0) {
             hi = dt;
-        else
+        } else {
             lo = dt;
+        }
     }
     return 0.5 * (lo + hi);
 }

@@ -14,8 +14,9 @@ static int oscillatory, departed;
 void pl_reset(double static_margin)
 {
     craft = pitch_default();
-    if (isfinite(static_margin))
+    if (isfinite(static_margin)) {
         craft.static_margin = fmax(-0.10, fmin(0.30, static_margin));
+    }
     state = (PitchState){0.0, 1000.0, 0.0, 0.0, 0.0, 0.0};
     pitch_trim(&craft, 4.0 * DEG, &state);
     trim_elevator = pitch_trim_elevator(&craft, 4.0 * DEG);
@@ -30,37 +31,44 @@ void pl_reset(double static_margin)
 
 void pl_elevator(double offset_degrees)
 {
-    if (isfinite(offset_degrees))
+    if (isfinite(offset_degrees)) {
         offset = fmax(-5.0, fmin(5.0, offset_degrees)) * DEG;
+    }
 }
 
 void pl_kick(double q_degrees)
 {
-    if (isfinite(q_degrees) && !departed)
+    if (isfinite(q_degrees) && !departed) {
         state.q += fmax(-30.0, fmin(30.0, q_degrees)) * DEG;
+    }
 }
 
 void pl_step(int frames)
 {
-    if (frames < 0)
+    if (frames < 0) {
         return;
-    if (frames > 250)
+    }
+    if (frames > 250) {
         frames = 250;
+    }
     for (int i = 0; i < frames && !departed; i++) {
         pitch_step(&craft, &state, trim_elevator + offset, 0.0, DT);
         elapsed += DT;
         double alpha = pitch_alpha(&state);
-        if (!(fabs(alpha) <= 25.0 * DEG && state.v >= 8.0 && state.v <= 80.0))
+        if (!(fabs(alpha) <= 25.0 * DEG && state.v >= 8.0 && state.v <= 80.0)) {
             departed = 1;
+        }
     }
 }
 
 double pl_value(int field)
 {
-    if (field >= PL_EIG_RE0 && field <= PL_EIG_RE3)
+    if (field >= PL_EIG_RE0 && field <= PL_EIG_RE3) {
         return eig_re[field - PL_EIG_RE0];
-    if (field >= PL_EIG_IM0 && field <= PL_EIG_IM3)
+    }
+    if (field >= PL_EIG_IM0 && field <= PL_EIG_IM3) {
         return eig_im[field - PL_EIG_IM0];
+    }
     switch (field) {
     case PL_TIME:
         return elapsed;

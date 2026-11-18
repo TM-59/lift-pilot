@@ -24,8 +24,9 @@ static void test_best_glide_matches_the_polar(void)
     double best = 0.0;
     for (double al = deg(-2.0); al < a.alpha_stall; al += 0.0005) {
         double r = lift_coeff(&a, al) / drag_coeff(&a, al);
-        if (r > best)
+        if (r > best) {
             best = r;
+        }
     }
     double expected = best_glide_ratio(&a);
     CHECK(fabs(best - expected) / expected < 0.01, "numeric best L/D %.2f vs analytic %.2f", best,
@@ -48,8 +49,9 @@ static void test_steady_glide_stays_steady(void)
     State s = {0.0, 1000.0, 0.0, 0.0, 0.0};
     trim_glide(&a, deg(4.0), &s);
     double v0 = s.v, g0 = s.gamma;
-    for (int k = 0; k < 1500; k++)
+    for (int k = 0; k < 1500; k++) {
         flight_step(&a, &s, deg(4.0), 0.0, 0.02);
+    }
     CHECK(fabs(s.v - v0) / v0 < 0.002, "airspeed drifted %.4f -> %.4f", v0, s.v);
     CHECK(fabs(s.gamma - g0) < 0.002, "path angle drifted %.4f -> %.4f", g0, s.gamma);
     double ratio = s.x / (1000.0 - s.h);
@@ -64,8 +66,9 @@ static void test_energy_is_conserved_without_drag(void)
     a.k = 0.0;
     State s = {0.0, 500.0, 30.0, 0.0, deg(5.0)};
     double e0 = specific_energy(&s);
-    for (int k = 0; k < 1000; k++)
+    for (int k = 0; k < 1000; k++) {
         flight_step(&a, &s, deg(5.0), 0.0, 0.02);
+    }
     CHECK(fabs(specific_energy(&s) - e0) / e0 < 1e-4, "energy %.3f -> %.3f", e0,
           specific_energy(&s));
 }
@@ -81,10 +84,12 @@ static void test_phugoid_period_follows_lanchester(void)
     for (int k = 1; k < 4000 && period < 0.0; k++) {
         flight_step(&a, &s, deg(4.0), 0.0, dt);
         double t = k * dt;
-        if (t_min < 0.0 && prev < prev2 && prev < s.v)
+        if (t_min < 0.0 && prev < prev2 && prev < s.v) {
             t_min = t - dt;
-        if (t_min > 0.0 && prev > prev2 && prev >= s.v)
+        }
+        if (t_min > 0.0 && prev > prev2 && prev >= s.v) {
             period = t - dt;
+        }
         prev2 = prev;
         prev = s.v;
     }
@@ -110,8 +115,9 @@ static void test_render_fits_the_screen(void)
     static char buf[RENDER_COLS * RENDER_ROWS * 4];
     size_t used = render_frame(&a, &s, 3000.0, buf, sizeof buf);
     int lines = 0;
-    for (size_t i = 0; i < used; i++)
+    for (size_t i = 0; i < used; i++) {
         lines += buf[i] == '\n';
+    }
     CHECK(lines == RENDER_ROWS, "expected %d lines, got %d", RENDER_ROWS, lines);
     CHECK(render_frame(&a, &s, 3000.0, buf, 8) == 0, "tiny buffer must be refused");
 }

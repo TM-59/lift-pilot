@@ -55,8 +55,9 @@ static double sign_p(int k, int n)
     double tail = 0.0;
     for (int x = k; x <= n; x++) {
         double comb = 1.0;
-        for (int y = 0; y < x; y++)
+        for (int y = 0; y < x; y++) {
             comb = comb * (n - y) / (y + 1);
+        }
         tail += comb;
     }
     return fmin(1.0, 2.0 * tail / pow(2.0, n));
@@ -88,8 +89,9 @@ static int differs(double a[ABLATION_SEEDS][2], double b[ABLATION_SEEDS][2], int
     int k = hi > lo ? hi : lo;
     *k_out = k;
     double rel = fabs(sb - sa) / fmax(fabs(sa), ABLATION_SEEDS * 1.0);
-    if (sign_p(k, ABLATION_SEEDS) > 0.05 || rel < 0.05)
+    if (sign_p(k, ABLATION_SEEDS) > 0.05 || rel < 0.05) {
         return 0;
+    }
     return hi > lo ? 1 : -1;
 }
 
@@ -158,18 +160,21 @@ int main(void)
         }
         strcat(want, "], \"won\": true");
         int seeds = 0, orders = 0;
-        for (const char *c = text; (c = strstr(c, "\"seed\": ")); c++)
+        for (const char *c = text; (c = strstr(c, "\"seed\": ")); c++) {
             seeds++;
-        for (const char *c = text; (c = strstr(c, want)); c++)
+        }
+        for (const char *c = text; (c = strstr(c, want)); c++) {
             orders++;
+        }
         assert(seeds >= 8 && orders == seeds);
         static const char all[] = "\"quiet\": [\"buyer\", \"mill\", \"doors\"]";
         assert(strstr(text,
                       "\"ending\": \"end-pulled\", \"quiet\": [\"buyer\", \"mill\", \"doors\"]"));
         assert(
             strstr(text, "\"ending\": \"end-whole\", \"quiet\": [\"buyer\", \"mill\", \"doors\"]"));
-        for (const char *c = text; (c = strstr(c, "\"quiet\": [")); c++)
+        for (const char *c = text; (c = strstr(c, "\"quiet\": [")); c++) {
             assert(strncmp(c, all, sizeof all - 1) == 0);
+        }
         printf("[order] %d seeds: hangar .. coast in the designed order; both endings reached\n",
                seeds);
     }

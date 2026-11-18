@@ -23,16 +23,20 @@ static int reference_trace(void)
         for (int i = 0; i <= 6000; i++) {
             if (i % 20 == 0) {
                 printf("%d,%d", mode, i);
-                for (int field = 0; field < LP_FIELDS; field++)
+                for (int field = 0; field < LP_FIELDS; field++) {
                     printf(",%.17g", lp_value(field));
+                }
                 putchar('\n');
             }
-            if (mode == 0 && i == 100)
+            if (mode == 0 && i == 100) {
                 lp_controls(7.0, 0.2);
-            if (mode == 0 && i == 400)
+            }
+            if (mode == 0 && i == 400) {
                 lp_controls(3.0, 0.0);
-            if (mode == 0 && i == 800)
+            }
+            if (mode == 0 && i == 800) {
                 lp_controls(4.0, 0.0);
+            }
             lp_step(1);
         }
     }
@@ -41,8 +45,9 @@ static int reference_trace(void)
 
 int main(int argc, char **argv)
 {
-    if (argc == 2 && strcmp(argv[1], "--trace") == 0)
+    if (argc == 2 && strcmp(argv[1], "--trace") == 0) {
         return reference_trace();
+    }
     /* The adapter must produce the unmodified point-mass model, not a JS approximation. */
     Aircraft a = glider_default();
     State direct = {0.0, 100.0, 0.0, 0.0, 0.0};
@@ -69,8 +74,9 @@ int main(int argc, char **argv)
     lp_reset(1);
     lp_controls(20.0, 1.0);
     CHECK(lp_value(LP_COMMAND) == 4.0 && lp_value(LP_THROTTLE) == 0.0);
-    for (int i = 0; i < 30000 && lp_value(LP_STATUS) == FLYING; i++)
+    for (int i = 0; i < 30000 && lp_value(LP_STATUS) == FLYING; i++) {
         lp_step(1);
+    }
     CHECK(lp_value(LP_STATUS) == LANDED);
     CHECK(lp_value(LP_ON_RUNWAY) == 1.0);
     CHECK(lp_value(LP_SINK) < 2.0);
@@ -81,8 +87,9 @@ int main(int argc, char **argv)
     CHECK(lp_value(LP_TIME) == t);
     lp_reset(0);
     lp_controls(-10.0, 0.0);
-    for (int i = 0; i < 30000 && lp_value(LP_STATUS) == FLYING; i++)
+    for (int i = 0; i < 30000 && lp_value(LP_STATUS) == FLYING; i++) {
         lp_step(1);
+    }
     CHECK(lp_value(LP_STATUS) == CRASHED);
     lp_reset(2);
     lp_step(-1);

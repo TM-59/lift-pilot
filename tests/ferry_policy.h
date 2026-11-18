@@ -108,8 +108,9 @@ static inline double pilot_target(Pilot *p, const Ferry *f, double *throttle)
     /* Each hop gets its own stirred stream, so a choice changes the hops it touches and not, by
      * chance, every later one. */
     if (f->hop != p->hop || f->outlandings != p->outlandings) {
-        if (f->hop != p->hop)
+        if (f->hop != p->hop) {
             p->rng.s = sub_seed(p->key, (uint64_t)f->hop, 5);
+        }
         p->hop = f->hop;
         p->outlandings = f->outlandings;
         pilot_plan(p);
@@ -133,16 +134,17 @@ static inline double pilot_target(Pilot *p, const Ferry *f, double *throttle)
         p->wait = p->glance;
     }
     /* Over the strip: hold the approach speed and let her settle. */
-    if (f->state.x >= f->strip)
+    if (f->state.x >= f->strip) {
         return hold_speed(p, f, p->cruise);
+    }
     int motor = f->motor && f->charge > 0.0 && h > 25.0;
     /* The two needles: the glide needed to reach the strip and the glide being made over the
      * ground. While the motor runs the second needle is pinned, so the climb lasts until the needed
      * glide has come down by a few points. */
     if (p->climbing) {
-        if (!motor || p->read < p->climb_to)
+        if (!motor || p->read < p->climb_to) {
             p->climbing = 0;
-        else {
+        } else {
             *throttle = 1.0;
             return hold_speed(p, f, BEST_SPEED);
         }
@@ -154,8 +156,9 @@ static inline double pilot_target(Pilot *p, const Ferry *f, double *throttle)
         *throttle = 1.0;
         return hold_speed(p, f, BEST_SPEED);
     }
-    if (margin < 1.0)
+    if (margin < 1.0) {
         return hold_speed(p, f, BEST_SPEED); /* no motor: stretch the glide */
+    }
     /* On short final, or below 100 m, there is no diving off extra height: it would only arrive
      * fast and float. */
     int final = f->state.x > f->strip - 600.0 || h < 100.0;
@@ -176,12 +179,13 @@ static inline double pilot_target(Pilot *p, const Ferry *f, double *throttle)
 static inline double pilot_command(Pilot *p, const Ferry *f, double *throttle)
 {
     double target = pilot_target(p, f, throttle), step = p->rate * 0.02;
-    if (target > p->cmd + step)
+    if (target > p->cmd + step) {
         p->cmd += step;
-    else if (target < p->cmd - step)
+    } else if (target < p->cmd - step) {
         p->cmd -= step;
-    else
+    } else {
         p->cmd = target;
+    }
     return p->cmd;
 }
 

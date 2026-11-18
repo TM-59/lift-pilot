@@ -41,8 +41,9 @@ static void test_trim_is_an_equilibrium(void)
     CHECK(fabs(pitch_moment_coeff(&p, PM_ALPHA, 0.0, de)) < 1e-15, "moment at trim %g",
           pitch_moment_coeff(&p, PM_ALPHA, 0.0, de));
     CHECK(fabs(pitch_trim_alpha(&p, de) - PM_ALPHA) < 1e-14, "trim alpha round trip");
-    for (int k = 0; k < 1500; k++)
+    for (int k = 0; k < 1500; k++) {
         pitch_step(&p, &s, de, 0.0, 0.02);
+    }
     CHECK(fabs(s.v - s0.v) < 1e-9 && fabs(s.gamma - s0.gamma) < 1e-12 && fabs(s.q) < 1e-12 &&
               fabs(pitch_alpha(&s) - PM_ALPHA) < 1e-12,
           "trim drifted: dv %g dgamma %g q %g", s.v - s0.v, s.gamma - s0.gamma, s.q);
@@ -54,8 +55,9 @@ static void test_energy_is_conserved_without_drag(void)
     p.base.cd0 = p.base.k = 0.0;
     PitchState s = {0.0, 500.0, 30.0, 0.0, 5.0 * PM_DEG, 0.2};
     double e0 = 0.5 * s.v * s.v + GRAVITY * s.h;
-    for (int k = 0; k < 1000; k++)
+    for (int k = 0; k < 1000; k++) {
         pitch_step(&p, &s, 0.0, 0.0, 0.02);
+    }
     double e = 0.5 * s.v * s.v + GRAVITY * s.h;
     CHECK(fabs(e / e0 - 1.0) < 1e-6, "energy %g -> %g", e0, e);
 }
@@ -121,8 +123,9 @@ static void test_elevator_step_settles_at_the_moment_balance(void)
     double expected = pitch_trim_alpha(&p, step);
     CHECK(fabs(expected - PM_ALPHA - p.cm_de * PM_DEG / pitch_cm_alpha(&p)) < 1e-12,
           "trim alpha is linear in the elevator");
-    for (int k = 0; k < 150000; k++)
+    for (int k = 0; k < 150000; k++) {
         pitch_step(&p, &s, step, 0.0, 0.02);
+    }
     CHECK(fabs(pitch_alpha(&s) - expected) < 1e-6, "alpha after 3000 s %.7f vs %.7f",
           pitch_alpha(&s), expected);
     CHECK(fabs(s.q) < 1e-5, "pitch rate settles: %g", s.q);
@@ -137,9 +140,11 @@ static void test_negative_static_margin_diverges(void)
     double a[4][4], re[4], im[4], lambda = -1.0;
     pitch_jacobian(&p, &s, de, a);
     pitch_eigen(a, re, im);
-    for (int i = 0; i < 4; i++)
-        if (im[i] == 0.0 && re[i] > lambda)
+    for (int i = 0; i < 4; i++) {
+        if (im[i] == 0.0 && re[i] > lambda) {
             lambda = re[i];
+        }
+    }
     CHECK(lambda > 0.0, "a real positive eigenvalue: %g", lambda);
     double rate = pm_growth_rate(&p, 10.0, 16.0);
     CHECK(rel(rate, lambda) < 0.03, "growth rate %.4f vs eigenvalue %.4f", rate, lambda);
@@ -148,8 +153,9 @@ static void test_negative_static_margin_diverges(void)
     s = pm_trimmed(&p, &de);
     pitch_jacobian(&p, &s, de, a);
     pitch_eigen(a, re, im);
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 4; i++) {
         CHECK(re[i] < 0.0, "SM 0.15 eigenvalue %d has real part %g", i, re[i]);
+    }
 }
 
 static void test_rk4_stability_limit(void)
