@@ -76,3 +76,23 @@ A first-time reader's understanding is judged by these, not by the local VLM pla
 A human first play, real phones (Safari), other browsers and a real GPU are not verified.
 The emotion values in `docs/narrative/beats.json` are the author's; an independent review has
 not been done. No public deployment has been made.
+
+## Requirement IDs and tests (M61)
+
+The `make check` trace collects only CTest testcases (`tests/ctest/CMakeLists.txt`) named with an ID below.
+The mapping is a declared name, not a proof that the requirement is met. The limits are the Acceptance section above.
+
+### REQ-glide-physics
+Point-mass glider: best L/D within 1 % of 1/(2√(CD0·k)), lift peak at the stall angle, steady glide, energy without drag,
+phugoid within 10 % of Lanchester, touchdown rating; the browser adapter equals the flight model for 1,200 steps.
+Tests: `test_flight`, `test_observer`.
+
+### REQ-pitch-model
+Rigid-body pitch model (`src/pitch.c`): eigenvalue solver, trim as an equilibrium, short-period and corrected phugoid within 5 %,
+elevator step, divergence behind the neutral point, RK4 step limit.
+Tests: `test_pitch`.
+
+### REQ-ferry
+The Last Ferry: equals `flight_step` with no story numbers, scene order, both endings, every story number, quiet heavy scenes,
+both choices' trade, and the representative `docs/narrative/` rows byte for byte.
+Tests: `test_ferry`, `story_bench --check`.
