@@ -169,7 +169,7 @@ builds and captures stay local. Initial distribution, including art, is checked 
 10,000,000 B by `make web`. Human first-play evaluation, actual mobile hardware and
 real-GPU performance remain unverified. No public web deployment has been made.
 
-Local-only standard entrypoints (M61, `~/project-context/rules/test-standard.json`):
+Local-only standard entrypoints (M61):
 
 ```sh
 make check        # unit + requirement trace + bench + smoke
@@ -179,7 +179,7 @@ make test-perf    # make bench
 make test-e2e     # make smoke
 ```
 
-Each program is one CTest testcase (`tests/ctest/CMakeLists.txt`). The shared runner (`~/project-context/bin/tm-test.py`) runs them in a temporary copy of the tracked files and writes git-ignored `test-results/<run_id>/<kind>.xml` and `test-results/summary.json`. Needs `cc`, `cmake`/`ctest`, Python 3.14; the smoke also needs `emcc` and Playwright in the npm cache. Kinds not adopted and why: `test-inventory.json`.
+Each program is one CTest testcase (`tests/ctest/CMakeLists.txt`). The shared local runner (`tm test`, found through `TM_TEST_CONTEXT`) runs them in a temporary copy of the tracked files and writes git-ignored `test-results/<run_id>/<kind>.xml` and `test-results/summary.json`. Needs `cc`, `cmake`/`ctest`, Python 3.14; the smoke also needs `emcc` and Playwright in the npm cache. Kinds not adopted and why: `test-inventory.json`.
 
 ## Roadmap
 
