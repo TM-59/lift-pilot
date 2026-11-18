@@ -9,7 +9,7 @@ static int checks;
     do {                                                                                           \
         checks++;                                                                                  \
         if (!(c)) {                                                                                \
-            fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #c);                                   \
+            (void)fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #c);                             \
             return 1;                                                                              \
         }                                                                                          \
     } while (0)

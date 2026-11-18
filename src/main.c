@@ -1,4 +1,3 @@
-#define _POSIX_C_SOURCE 200809L
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,12 +27,12 @@ static int headless(const char *dir)
     enum { N = 6000, STRIDE = 20, M = N / STRIDE };
     static float t[M], v[M], hh[M], xx[M];
     char path[512];
-    snprintf(path, sizeof path, "%s/run.csv", dir);
+    (void)snprintf(path, sizeof path, "%s/run.csv", dir);
     FILE *csv = fopen(path, "w");
     if (!csv) {
         return 1;
     }
-    fprintf(csv, "t,x,h,v,gamma,alpha\n");
+    (void)fprintf(csv, "t,x,h,v,gamma,alpha\n");
     for (int k = 0; k < N; k++) {
         if (k % STRIDE == 0) {
             int i = k / STRIDE;
@@ -41,22 +40,25 @@ static int headless(const char *dir)
             xx[i] = (float)s.x;
             hh[i] = (float)s.h;
             v[i] = (float)s.v;
-            fprintf(csv, "%.2f,%.1f,%.2f,%.3f,%.5f,%.5f\n", k * DT, s.x, s.h, s.v, s.gamma,
-                    s.alpha);
+            (void)fprintf(csv, "%.2f,%.1f,%.2f,%.3f,%.5f,%.5f\n", k * DT, s.x, s.h, s.v, s.gamma,
+                          s.alpha);
         }
         flight_step(&a, &s, deg(4.0), 0.0, DT);
     }
-    fclose(csv);
-
-    snprintf(path, sizeof path, "%s/speed.svg", dir);
-    Series sp[] = {{"airspeed V [m/s]", v, "#1f77b4"}};
-    if (svg_plot(path, "Phugoid: airspeed after a +10% disturbance", "t [s]", "V [m/s]", t, M, sp,
-                 1)) {
+    if (fclose(csv) != 0) {
         return 1;
     }
-    snprintf(path, sizeof path, "%s/track.svg", dir);
+
+    (void)snprintf(path, sizeof path, "%s/speed.svg", dir);
+    Series sp[] = {{"airspeed V [m/s]", v, "#1f77b4"}};
+    if (svg_plot(path, &(Chart){"Phugoid: airspeed after a +10% disturbance", "t [s]", "V [m/s]"},
+                 t, M, sp, 1)) {
+        return 1;
+    }
+    (void)snprintf(path, sizeof path, "%s/track.svg", dir);
     Series tr[] = {{"altitude h [m]", hh, "#2ca02c"}};
-    if (svg_plot(path, "Flight path (altitude vs distance)", "x [m]", "h [m]", xx, M, tr, 1)) {
+    if (svg_plot(path, &(Chart){"Flight path (altitude vs distance)", "x [m]", "h [m]"}, xx, M, tr,
+                 1)) {
         return 1;
     }
 
@@ -70,15 +72,15 @@ static int headless(const char *dir)
         cdx[i] = cd[i];
         ld[i] = cl[i] / cd[i];
     }
-    snprintf(path, sizeof path, "%s/polar.svg", dir);
+    (void)snprintf(path, sizeof path, "%s/polar.svg", dir);
     Series po[] = {{"CL", cl, "#d62728"}};
-    if (svg_plot(path, "Drag polar (CL vs CD)", "CD", "CL", cdx, P, po, 1)) {
+    if (svg_plot(path, &(Chart){"Drag polar (CL vs CD)", "CD", "CL"}, cdx, P, po, 1)) {
         return 1;
     }
-    snprintf(path, sizeof path, "%s/ld.svg", dir);
+    (void)snprintf(path, sizeof path, "%s/ld.svg", dir);
     Series lr[] = {{"L/D", ld, "#9467bd"}};
-    if (svg_plot(path, "Lift-to-drag ratio vs angle of attack", "alpha [deg]", "L/D", al, P, lr,
-                 1)) {
+    if (svg_plot(path, &(Chart){"Lift-to-drag ratio vs angle of attack", "alpha [deg]", "L/D"}, al,
+                 P, lr, 1)) {
         return 1;
     }
     printf("best L/D %.1f, trim V %.1f m/s\n", best_glide_ratio(&a), s.v);
@@ -117,8 +119,10 @@ static int pitch_chart(const char *path)
                    {"steady, SM 0.10", steady[0], "#aec7e8"},
                    {"SM 0.30", al[1], "#2ca02c"},
                    {"steady, SM 0.30", steady[1], "#98df8a"}};
-    return svg_plot(path, "Short period: alpha after a 1 deg nose-up elevator step", "t [s]",
-                    "alpha [deg]", t, N, sr, 4)
+    return svg_plot(path,
+                    &(Chart){"Short period: alpha after a 1 deg nose-up elevator step", "t [s]",
+                             "alpha [deg]"},
+                    t, N, sr, 4)
                ? 1
                : 0;
 }
@@ -132,7 +136,7 @@ static int snapshot(void)
     if (!render_frame(&a, &s, RUNWAY_X, buf, sizeof buf)) {
         return 1;
     }
-    fputs(buf, stdout);
+    (void)fputs(buf, stdout);
     return 0;
 }
 
@@ -200,23 +204,26 @@ static struct termios saved;
 static void restore(void)
 {
     tcsetattr(STDIN_FILENO, TCSANOW, &saved);
-    fputs("\033[?25h", stdout);
+    (void)fputs("\033[?25h", stdout);
 }
 
 static int play(void)
 {
     if (!isatty(STDIN_FILENO)) {
-        fputs("interactive mode needs a terminal; try --snapshot\n", stderr);
+        (void)fputs("interactive mode needs a terminal; try --snapshot\n", stderr);
         return 1;
     }
     tcgetattr(STDIN_FILENO, &saved);
     struct termios raw = saved;
-    raw.c_lflag &= ~(ICANON | ECHO);
+    raw.c_lflag &= ~((tcflag_t)ICANON | (tcflag_t)ECHO);
     raw.c_cc[VMIN] = 0;
     raw.c_cc[VTIME] = 0;
     tcsetattr(STDIN_FILENO, TCSANOW, &raw);
-    atexit(restore);
-    fputs("\033[2J\033[?25l", stdout);
+    if (atexit(restore) != 0) {
+        restore();
+        return 1;
+    }
+    (void)fputs("\033[2J\033[?25l", stdout);
 
     Aircraft a = glider_default();
     State s = {0.0, 400.0, 0.0, 0.0, 0.0};
@@ -266,7 +273,7 @@ static int play(void)
                s.alpha * 57.2958, cmd * 57.2958, throttle * 100.0,
                s.alpha > a.alpha_stall ? "  STALL!" : "");
         puts("w/s pitch  r/f throttle  p pause  q quit    land softly on the === runway");
-        fflush(stdout);
+        (void)fflush(stdout);
         nanosleep(&tick, NULL);
     }
     int on_runway = s.x >= RUNWAY_X && s.x <= RUNWAY_X + 300.0;

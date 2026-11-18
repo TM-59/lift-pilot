@@ -38,13 +38,13 @@ static void reach(Ferry *f, int target, int route, int pulled)
 
 static char *slurp(const char *path)
 {
-    static char text[2][1 << 18];
-    static int slot;
+    static char text[2][1U << 18U];
+    static unsigned slot;
     FILE *fp = fopen(path, "rb");
     assert(fp);
-    char *buf = text[slot++ & 1];
+    char *buf = text[slot++ & 1U];
     size_t len = fread(buf, 1, sizeof text[0] - 1, fp);
-    fclose(fp);
+    (void)fclose(fp); /* read only */
     buf[len] = 0;
     return buf;
 }
@@ -101,7 +101,7 @@ static void read_pair(const char *text, const char *section, const char *name, c
     char head[64];
     const char *at = strstr(text, section);
     assert(at);
-    snprintf(head, sizeof head, "\"%s\": {", name);
+    (void)snprintf(head, sizeof head, "\"%s\": {", name);
     at = strstr(at, head);
     assert(at);
     at = strstr(at, first);

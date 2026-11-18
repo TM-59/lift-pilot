@@ -21,15 +21,15 @@ static float xs[MAXN], ya[MAXN], yb[MAXN], yc[MAXN];
 static const char *path(const char *name)
 {
     static char buf[640];
-    snprintf(buf, sizeof buf, "%s/%s", dir, name);
+    (void)snprintf(buf, sizeof buf, "%s/%s", dir, name);
     return buf;
 }
 
 static void plot(const char *name, const char *title, const char *xl, const char *yl, int count,
                  const Series *s, int ns)
 {
-    if (svg_plot(path(name), title, xl, yl, xs, count, s, ns) != 0) {
-        fprintf(stderr, "cannot write %s\n", name);
+    if (svg_plot(path(name), &(Chart){title, xl, yl}, xs, count, s, ns) != 0) {
+        (void)fprintf(stderr, "cannot write %s\n", name);
         exit(1);
     }
 }
@@ -38,7 +38,7 @@ static void plot(const char *name, const char *title, const char *xl, const char
 static void value(const char *id, const char *what, double measured, double theory)
 {
     double err = theory != 0.0 ? fabs(measured / theory - 1.0) : fabs(measured - theory);
-    fprintf(values, "| `%s` | %s | %.6g | %.6g | %.2e |\n", id, what, measured, theory, err);
+    (void)fprintf(values, "| `%s` | %s | %.6g | %.6g | %.2e |\n", id, what, measured, theory, err);
 }
 
 /* 01: lift and drag coefficients against angle of attack, through the stall. */
@@ -528,7 +528,7 @@ static void fig_root_locus(void)
 {
     FILE *f = fopen(path("root-locus.svg"), "w");
     if (!f) {
-        fprintf(stderr, "cannot write root-locus.svg\n");
+        (void)fprintf(stderr, "cannot write root-locus.svg\n");
         exit(1);
     }
     const int W = 720, H = 400, T = 50, B = 340;
@@ -538,43 +538,47 @@ static void fig_root_locus(void)
         const char *title;
     } pan[2] = {{-6.0, 1.0, -5.0, 5.0, 60, 360, "all four eigenvalues"},
                 {-0.7, 0.7, -0.7, 0.7, 430, 700, "zoom: phugoid and divergence"}};
-    fprintf(f,
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 %d %d\" width=\"%d\" "
-            "height=\"%d\" font-family=\"sans-serif\" font-size=\"12\">\n",
-            W, H, W, H);
-    fprintf(f,
-            "<rect width=\"%d\" height=\"%d\" fill=\"#ffffff\"/>\n<text x=\"60\" y=\"24\" "
-            "font-size=\"16\" font-weight=\"bold\" fill=\"#222\">Root locus: static margin -0.10 "
-            "(red) to 0.30 (blue)</text>\n",
-            W, H);
+    (void)fprintf(f,
+                  "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 %d %d\" width=\"%d\" "
+                  "height=\"%d\" font-family=\"sans-serif\" font-size=\"12\">\n",
+                  W, H, W, H);
+    (void)fprintf(
+        f,
+        "<rect width=\"%d\" height=\"%d\" fill=\"#ffffff\"/>\n<text x=\"60\" y=\"24\" "
+        "font-size=\"16\" font-weight=\"bold\" fill=\"#222\">Root locus: static margin -0.10 "
+        "(red) to 0.30 (blue)</text>\n",
+        W, H);
     for (int k = 0; k < 2; k++) {
         double sx = (pan[k].r - pan[k].l) / (pan[k].x1 - pan[k].x0),
                sy = (B - T) / (pan[k].y1 - pan[k].y0);
         double zx = pan[k].l - pan[k].x0 * sx, zy = T + pan[k].y1 * sy;
-        fprintf(
+        (void)fprintf(
             f,
             "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" fill=\"none\" stroke=\"#888\"/>\n",
             pan[k].l, T, pan[k].r - pan[k].l, B - T);
-        fprintf(f, "<rect x=\"%.1f\" y=\"%d\" width=\"%.1f\" height=\"%d\" fill=\"#fdecea\"/>\n",
-                zx, T, pan[k].r - zx, B - T);
-        fprintf(f,
-                "<line x1=\"%.1f\" y1=\"%d\" x2=\"%.1f\" y2=\"%d\" stroke=\"#444\"/><line "
-                "x1=\"%d\" y1=\"%.1f\" x2=\"%d\" y2=\"%.1f\" stroke=\"#444\"/>\n",
-                zx, T, zx, B, pan[k].l, zy, pan[k].r, zy);
-        fprintf(f, "<text x=\"%d\" y=\"%d\" fill=\"#222\">%s</text>\n", pan[k].l, T - 8,
-                pan[k].title);
-        fprintf(f,
-                "<text x=\"%d\" y=\"%d\" fill=\"#444\">%g</text><text x=\"%d\" y=\"%d\" "
-                "text-anchor=\"end\" fill=\"#444\">%g</text>\n",
-                pan[k].l, B + 16, pan[k].x0, pan[k].r, B + 16, pan[k].x1);
-        fprintf(f,
-                "<text x=\"%d\" y=\"%d\" text-anchor=\"end\" fill=\"#444\">%g</text><text x=\"%d\" "
-                "y=\"%d\" text-anchor=\"end\" fill=\"#444\">%g</text>\n",
-                pan[k].l - 4, T + 10, pan[k].y1, pan[k].l - 4, B, pan[k].y0);
-        fprintf(f,
-                "<text x=\"%d\" y=\"%d\" text-anchor=\"middle\" fill=\"#222\">real part [1/s] "
-                "(shaded: unstable)</text>\n",
-                (pan[k].l + pan[k].r) / 2, B + 32);
+        (void)fprintf(f,
+                      "<rect x=\"%.1f\" y=\"%d\" width=\"%.1f\" height=\"%d\" fill=\"#fdecea\"/>\n",
+                      zx, T, pan[k].r - zx, B - T);
+        (void)fprintf(f,
+                      "<line x1=\"%.1f\" y1=\"%d\" x2=\"%.1f\" y2=\"%d\" stroke=\"#444\"/><line "
+                      "x1=\"%d\" y1=\"%.1f\" x2=\"%d\" y2=\"%.1f\" stroke=\"#444\"/>\n",
+                      zx, T, zx, B, pan[k].l, zy, pan[k].r, zy);
+        (void)fprintf(f, "<text x=\"%d\" y=\"%d\" fill=\"#222\">%s</text>\n", pan[k].l, T - 8,
+                      pan[k].title);
+        (void)fprintf(f,
+                      "<text x=\"%d\" y=\"%d\" fill=\"#444\">%g</text><text x=\"%d\" y=\"%d\" "
+                      "text-anchor=\"end\" fill=\"#444\">%g</text>\n",
+                      pan[k].l, B + 16, pan[k].x0, pan[k].r, B + 16, pan[k].x1);
+        (void)fprintf(
+            f,
+            "<text x=\"%d\" y=\"%d\" text-anchor=\"end\" fill=\"#444\">%g</text><text x=\"%d\" "
+            "y=\"%d\" text-anchor=\"end\" fill=\"#444\">%g</text>\n",
+            pan[k].l - 4, T + 10, pan[k].y1, pan[k].l - 4, B, pan[k].y0);
+        (void)fprintf(
+            f,
+            "<text x=\"%d\" y=\"%d\" text-anchor=\"middle\" fill=\"#222\">real part [1/s] "
+            "(shaded: unstable)</text>\n",
+            (pan[k].l + pan[k].r) / 2, B + 32);
         for (int i = 0; i <= 80; i++) {
             PitchAircraft p = pitch_default();
             p.static_margin = -0.10 + 0.005 * i;
@@ -589,17 +593,19 @@ static void fig_root_locus(void)
                 if (x < pan[k].l || x > pan[k].r || y < T || y > B) {
                     continue;
                 }
-                fprintf(f, "<circle cx=\"%.1f\" cy=\"%.1f\" r=\"%s\" fill=\"rgb(%d,%d,%d)\"/>\n", x,
-                        y, i == 50 ? "4.5" : "2", red, green, blue);
+                (void)fprintf(f,
+                              "<circle cx=\"%.1f\" cy=\"%.1f\" r=\"%s\" fill=\"rgb(%d,%d,%d)\"/>\n",
+                              x, y, i == 50 ? "4.5" : "2", red, green, blue);
             }
         }
     }
-    fprintf(f,
-            "<text x=\"16\" y=\"%d\" transform=\"rotate(-90 16 %d)\" text-anchor=\"middle\" "
-            "fill=\"#222\">imaginary part [rad/s]</text>\n",
-            (T + B) / 2, (T + B) / 2);
-    fprintf(f, "<text x=\"60\" y=\"392\" fill=\"#222\">large dots: the default, static margin "
-               "0.15</text>\n</svg>\n");
+    (void)fprintf(f,
+                  "<text x=\"16\" y=\"%d\" transform=\"rotate(-90 16 %d)\" text-anchor=\"middle\" "
+                  "fill=\"#222\">imaginary part [rad/s]</text>\n",
+                  (T + B) / 2, (T + B) / 2);
+    (void)fprintf(f,
+                  "<text x=\"60\" y=\"392\" fill=\"#222\">large dots: the default, static margin "
+                  "0.15</text>\n</svg>\n");
     if (fclose(f) != 0) {
         exit(1);
     }
@@ -898,17 +904,18 @@ static void fig_pitch_rk4(void)
 
 int main(int argc, char **argv)
 {
-    snprintf(dir, sizeof dir, "%s", argc > 1 ? argv[1] : "docs/theory/figures");
+    (void)snprintf(dir, sizeof dir, "%s", argc > 1 ? argv[1] : "docs/theory/figures");
     values = fopen(path("values.md"), "w");
     if (!values) {
-        fprintf(stderr, "cannot write %s (does the directory exist?)\n", path("values.md"));
+        (void)fprintf(stderr, "cannot write %s (does the directory exist?)\n", path("values.md"));
         return 1;
     }
-    fprintf(values, "# Measured values\n\nGenerated by `make theory-figs` (`tests/theory_figs.c`). "
-                    "Do not edit by hand.\n"
-                    "SI units: m, s, kg, N, rad unless a row says otherwise. Default aircraft: 300 "
-                    "kg, 10 m^2, air density 1.225 kg/m^3.\n\n"
-                    "| id | what | measured | theory | relative error |\n|---|---|---|---|---|\n");
+    (void)fprintf(values,
+                  "# Measured values\n\nGenerated by `make theory-figs` (`tests/theory_figs.c`). "
+                  "Do not edit by hand.\n"
+                  "SI units: m, s, kg, N, rad unless a row says otherwise. Default aircraft: 300 "
+                  "kg, 10 m^2, air density 1.225 kg/m^3.\n\n"
+                  "| id | what | measured | theory | relative error |\n|---|---|---|---|---|\n");
     fig_coefficients();
     fig_polar();
     fig_forces();
