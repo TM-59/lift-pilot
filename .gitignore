@@ -12,3 +12,6 @@ story_bench
 .story-check/
 theory_figs
 test_pitch
+test-results/
+.tm-ctest/
+.tm-home/
