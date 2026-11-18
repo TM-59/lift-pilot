@@ -1,6 +1,16 @@
 {
   "name": "lift-pilot-checks",
   "private": true,
-  "scripts": {"smoke": "node scripts/smoke.cjs"},
-  "devDependencies": {"playwright": "1.63.0"}
+  "scripts": {
+    "smoke": "node scripts/smoke.cjs",
+    "fmt": "biome check --write",
+    "lint": "biome ci --error-on-warnings",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8",
+    "@types/node": "26.6.6",
+    "playwright": "1.63.0",
+    "typescript": "7.0.2"
+  }
 }
