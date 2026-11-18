@@ -7,6 +7,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
 const root = path.resolve('dist');
+/** @type {Record<string, string>} */
 const mime = {
   '.html': 'text/html',
   '.mjs': 'text/javascript',
@@ -18,7 +19,7 @@ const mime = {
 const server = http.createServer((req, res) => {
   const file = path.resolve(
     root,
-    '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname),
+    `.${decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname)}`,
   );
   const target = file === root ? path.join(root, 'index.html') : file;
   if (!target.startsWith(root + path.sep)) {
@@ -33,13 +34,27 @@ const server = http.createServer((req, res) => {
     }
   });
 });
-let browser,
-  checks = 0;
+/** @type {import('playwright').Browser | undefined} */
+let browser;
+let checks = 0;
+/**
+ * @param {unknown} value
+ * @param {string} message
+ */
 const check = (value, message) => {
   assert.ok(value, message);
   checks++;
 };
-const snapshot = (page) => page.evaluate(() => window.liftView.snapshot);
+/** @param {import('playwright').Page} page */
+const snapshot = async (page) => {
+  const view = await page.evaluate(() => window.liftView?.snapshot);
+  if (!view) throw new Error('the page has no liftView yet');
+  return view;
+};
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} name
+ */
 async function capture(page, name) {
   await page.screenshot({
     path: `docs/images/${name}.jpg`,
@@ -48,6 +63,10 @@ async function capture(page, name) {
     fullPage: true,
   });
 }
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} url
+ */
 async function ready(page, url) {
   await page.goto(url);
   await page.waitForFunction(() => window.liftView?.snapshot?.artReady);
@@ -104,12 +123,14 @@ async function compareWasm() {
     phIm: engine._pl_value(23),
     trimAfterStep: 0,
   };
-  for (const [key, id] of [
+  /** @type {['spRe' | 'spIm' | 'phRe' | 'phIm', string][]} */
+  const pairs = [
     ['spRe', 'sp-eig-re'],
     ['spIm', 'sp-eig-im'],
     ['phRe', 'ph-eig-re'],
     ['phIm', 'ph-eig-im'],
-  ])
+  ];
+  for (const [key, id] of pairs)
     check(
       Math.abs(pitch[key] / values[id] - 1) < 1e-5,
       `WASM ${key} ${pitch[key]} vs native ${id} ${values[id]}`,
@@ -129,16 +150,21 @@ async function run() {
   fs.mkdirSync('docs/images', { recursive: true });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(0, '127.0.0.1', () => resolve(undefined));
   });
-  const origin = `http://127.0.0.1:${server.address().port}`;
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('the server has no port');
+  const origin = `http://127.0.0.1:${address.port}`;
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  /** @type {string[]} */
   const errors = [],
+    /** @type {string[]} */
     external = [];
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1050 },
     deviceScaleFactor: 1,
   });
+  /** @param {import('playwright').Page} page */
   const track = (page) => {
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (msg) => {
@@ -158,7 +184,7 @@ async function run() {
   await before.close();
   const page = await context.newPage();
   track(page);
-  await ready(page, origin + '/');
+  await ready(page, `${origin}/`);
   check((await snapshot(page)).paused, 'starts paused');
   await capture(page, 'observatory');
   const initial = await snapshot(page);
@@ -241,7 +267,7 @@ async function run() {
   });
   const mobile = await mobileContext.newPage();
   track(mobile);
-  await ready(mobile, origin + '/');
+  await ready(mobile, `${origin}/`);
   await mobile.getByRole('button', { name: 'Increase angle of attack' }).tap();
   check((await snapshot(mobile)).command === 5, 'touch control reaches C');
   await mobile.getByRole('button', { name: 'Start flying' }).tap();
@@ -264,7 +290,7 @@ async function run() {
   const fallback = await context.newPage();
   track(fallback);
   await fallback.route('**/art/**', (route) => route.fulfill({ status: 200, body: '' }));
-  await fallback.goto(origin + '/');
+  await fallback.goto(`${origin}/`);
   await fallback.waitForFunction(() => window.liftView?.snapshot);
   await fallback.clock.install();
   await fallback.getByRole('button', { name: 'Start flying' }).click();
@@ -277,7 +303,7 @@ async function run() {
   // Engine failure is a visible, noninteractive error state, not fake telemetry.
   const broken = await context.newPage();
   await broken.route('**/physics.wasm', (route) => route.fulfill({ status: 200, body: '' }));
-  await broken.goto(origin + '/');
+  await broken.goto(`${origin}/`);
   await broken.getByText('Flight model unavailable — reload to retry').waitFor();
   check(
     (await broken.locator('#toggle').isDisabled()) && (await broken.locator('#pitch').isDisabled()),
@@ -325,26 +351,36 @@ async function run() {
       .filter((file) => file.endsWith('.jpg'))
       .sort(),
   };
-  fs.writeFileSync('docs/validation.json', JSON.stringify(result, null, 2) + '\n');
+  fs.writeFileSync('docs/validation.json', `${JSON.stringify(result, null, 2)}\n`);
   console.log(JSON.stringify(result, null, 2));
 }
 // The last ferry, flown through the page with real clicks and the real sliders: a simple pilot that reads the
 // glide gauges on screen (motor on when the glide needed is steeper than the glide being made, if there is a motor).
 const ORDER = ['hangar', 'weir', 'orchard', 'buyer', 'mill', 'doors', 'coast'];
 const HEAVY = ['buyer', 'mill', 'doors'];
+/**
+ * @param {import('playwright').BrowserContext} context
+ * @param {string} origin
+ * @param {(page: import('playwright').Page) => void} track
+ * @param {{ weir: number, mill: number, shots: boolean }} path
+ */
 async function flyFerry(context, origin, track, path) {
   const page = await context.newPage();
   track(page);
-  await ready(page, origin + '/');
+  await ready(page, `${origin}/`);
   check((await snapshot(page)).welcome, 'welcome card on first load');
   await page.getByRole('button', { name: 'Fly the last ferry', exact: false }).first().click();
   let snap = await snapshot(page);
   check(
-    snap.ferry && snap.sceneId === 'hangar' && snap.sceneText.includes("They're not in the sale."),
+    snap.ferry &&
+      snap.sceneId === 'hangar' &&
+      (snap.sceneText ?? '').includes("They're not in the sale."),
     'the ferry opens in the hangar',
   );
   if (path.shots) await capture(page, 'ferry-hangar');
+  /** @type {string[]} */
   const seen = [],
+    /** @type {string[]} */
     quietAfter = [];
   let shot = false,
     frames = 0;
@@ -397,7 +433,7 @@ async function flyFerry(context, origin, track, path) {
     'heavy scenes logged quiet',
   );
   const ending = path.mill === 0 ? 'reading glasses' : 'logbook under your arm';
-  check(snap.sceneText.includes(ending), `ending for mill=${path.mill}`);
+  check((snap.sceneText ?? '').includes(ending), `ending for mill=${path.mill}`);
   check(snap.pulled === path.mill && snap.route === path.weir, 'choices reached C');
   if (path.shots) await capture(page, 'ferry-ending');
   const result = {
@@ -414,12 +450,20 @@ async function flyFerry(context, origin, track, path) {
   return result;
 }
 // Phone-sized, touch only: the welcome card, the first scene and its answer are readable and tappable.
+/**
+ * @param {import('playwright').Browser} browser
+ * @param {string} origin
+ * @param {(page: import('playwright').Page) => void} track
+ */
 async function ferryPhone(browser, origin, track) {
+  /** @type {Record<string, object>} */
   const out = {};
-  for (const [name, viewport] of [
+  /** @type {[string, { width: number, height: number }][]} */
+  const views = [
     ['portrait', { width: 375, height: 812 }],
     ['landscape', { width: 812, height: 375 }],
-  ]) {
+  ];
+  for (const [name, viewport] of views) {
     const ctx = await browser.newContext({
       viewport,
       deviceScaleFactor: 1,
@@ -428,7 +472,7 @@ async function ferryPhone(browser, origin, track) {
     });
     const page = await ctx.newPage();
     track(page);
-    await ready(page, origin + '/');
+    await ready(page, `${origin}/`);
     await page.locator('#welcome-start').tap();
     const sizes = await page.evaluate(() => {
       const fonts = [
@@ -438,7 +482,9 @@ async function ferryPhone(browser, origin, track) {
         const r = el.getBoundingClientRect();
         return Math.min(r.width, r.height);
       });
-      const c = document.getElementById('scene').getBoundingClientRect();
+      const view = document.getElementById('scene');
+      if (!view) throw new Error('missing #scene');
+      const c = view.getBoundingClientRect();
       return {
         font: Math.min(...fonts),
         target: Math.min(...targets),
@@ -460,7 +506,7 @@ async function ferryPhone(browser, origin, track) {
       snap.hop === 0 &&
         !snap.sceneId &&
         snap.time > 1 &&
-        (await page.evaluate(() => window.__tmGate.goal())),
+        (await page.evaluate(() => window.__tmGate?.goal())),
       `${name}: one tap takes off`,
     );
     if (name === 'portrait') await capture(page, 'mobile-ferry');
@@ -471,13 +517,28 @@ async function ferryPhone(browser, origin, track) {
 }
 // The goal and the next step (bug #10): always on screen above the view, 14 CSS px or larger, the same words as
 // __tmGate.objective()/hint(), and never over the view, the instruments, the quick controls or the alerts.
+/**
+ * @param {import('playwright').Browser} browser
+ * @param {string} origin
+ * @param {(page: import('playwright').Page) => void} track
+ */
 async function guideCheck(browser, origin, track) {
+  /** @type {Record<string, object>} */
   const out = {};
+  /** @param {import('playwright').Page} page */
   const measure = (page) =>
     page.evaluate(() => {
+      /** @param {Element} el */
       const R = (el) => el.getBoundingClientRect(),
         g = document.getElementById('guide'),
-        rg = R(g);
+        gate = window.__tmGate,
+        view = window.liftView;
+      if (!g || !gate || !view) throw new Error('missing #guide, __tmGate or liftView');
+      const rg = R(g);
+      /**
+       * @param {DOMRect} a
+       * @param {DOMRect} b
+       */
       const hit = (a, b) =>
         a.left < b.right - 0.5 &&
         b.left < a.right - 0.5 &&
@@ -492,39 +553,46 @@ async function guideCheck(browser, origin, track) {
         '.control-panel',
       ]
         .map((sel) => (sel[0] === '.' ? document.querySelector(sel) : document.getElementById(sel)))
-        .filter((el) => el && el.getClientRects().length);
+        .filter((el) => el !== null && el.getClientRects().length > 0);
       const quick = [...document.querySelectorAll('.quick button')]
         .filter((el) => el.getClientRects().length)
         .map(R);
       return {
-        goal: document.getElementById('goal-line').textContent,
-        next: document.getElementById('next-step').textContent,
+        goal: document.getElementById('goal-line')?.textContent ?? '',
+        next: document.getElementById('next-step')?.textContent ?? '',
         hook:
-          window.__tmGate.objective() === document.getElementById('goal-line').textContent &&
-          window.__tmGate.hint() === document.getElementById('next-step').textContent,
+          gate.objective() === document.getElementById('goal-line')?.textContent &&
+          gate.hint() === document.getElementById('next-step')?.textContent,
         font: Math.min(
           ...[...g.querySelectorAll('span')].map((el) => parseFloat(getComputedStyle(el).fontSize)),
         ),
-        overlaps: others.filter((el) => hit(rg, R(el))).length,
+        overlaps: others.filter((el) => el !== null && hit(rg, R(el))).length,
         inView: rg.top >= 0 && rg.bottom <= innerHeight,
         quick: quick.length,
         quickInView: quick.every((r) => r.bottom <= innerHeight && r.width >= 44 && r.height >= 44),
-        target: window.liftView.snapshot.guide.target,
-        next2: window.__tmGate.nextTarget(),
+        target: view.snapshot.guide.target,
+        next2: gate.nextTarget(),
       };
     });
+  /**
+   * @param {import('playwright').Page} page
+   * @param {number} value
+   */
   const pitch = (page, value) =>
     page.evaluate((v) => {
       const el = document.getElementById('pitch');
-      el.value = v;
+      if (!(el instanceof HTMLInputElement)) throw new Error('missing #pitch');
+      el.value = String(v);
       el.dispatchEvent(new Event('input'));
     }, value);
-  for (const [name, viewport] of [
+  /** @type {[string, { width: number, height: number }][]} */
+  const guideViews = [
     ['portrait', { width: 375, height: 812 }],
     ['landscape', { width: 812, height: 375 }],
     ['small-landscape', { width: 667, height: 375 }],
     ['desktop', { width: 1440, height: 1000 }],
-  ]) {
+  ];
+  for (const [name, viewport] of guideViews) {
     const phone = name !== 'desktop';
     const ctx = await browser.newContext({
       viewport,
@@ -534,7 +602,8 @@ async function guideCheck(browser, origin, track) {
     });
     const page = await ctx.newPage();
     track(page);
-    await ready(page, origin + '/');
+    await ready(page, `${origin}/`);
+    /** @type {Record<string, Awaited<ReturnType<typeof measure>>>} */
     const states = { welcome: await measure(page) };
     await page.locator('#welcome-start').click();
     states.scene = await measure(page);
@@ -554,7 +623,9 @@ async function guideCheck(browser, origin, track) {
       // Scrolled down to the instruments, the goal and the next step stay pinned at the top of the screen.
       const pinned = await page.evaluate(() => {
         scrollTo(0, 420);
-        const r = document.getElementById('guide').getBoundingClientRect();
+        const guide = document.getElementById('guide');
+        if (!guide) throw new Error('missing #guide');
+        const r = guide.getBoundingClientRect();
         const top = r.top;
         scrollTo(0, 0);
         return top >= 0 && r.bottom <= innerHeight;
@@ -597,7 +668,7 @@ async function guideCheck(browser, origin, track) {
   });
   const page = await ctx.newPage();
   track(page);
-  await ready(page, origin + '/');
+  await ready(page, `${origin}/`);
   await page.getByRole('button', { name: 'Open the flight laboratory instead' }).tap();
   const start = await measure(page);
   check(/Start flying/.test(start.next) && start.target === 'toggle', 'lab: start flying first');
@@ -621,15 +692,28 @@ run()
   });
 
 // The pitch laboratory (src/pitch_lab.c): real sliders and buttons, the C numbers on screen, readable on phones and PCs.
+/**
+ * @param {import('playwright').Browser} browser
+ * @param {string} origin
+ * @param {(page: import('playwright').Page) => void} track
+ */
 async function pitchLabCheck(browser, origin, track) {
+  /** @type {Record<string, object>} */
   const out = {};
-  const lab = (page) => page.evaluate(() => window.pitchLab.snapshot);
-  for (const [name, viewport] of [
+  /** @param {import('playwright').Page} page */
+  const lab = async (page) => {
+    const view = await page.evaluate(() => window.pitchLab?.snapshot);
+    if (!view) throw new Error('the page has no pitchLab yet');
+    return view;
+  };
+  /** @type {[string, { width: number, height: number }][]} */
+  const labViews = [
     ['desktop', { width: 1440, height: 1000 }],
     ['laptop', { width: 1024, height: 768 }],
     ['portrait', { width: 390, height: 844 }],
     ['landscape', { width: 844, height: 390 }],
-  ]) {
+  ];
+  for (const [name, viewport] of labViews) {
     const phone = name === 'portrait' || name === 'landscape';
     const ctx = await browser.newContext({
       viewport,
@@ -639,16 +723,17 @@ async function pitchLabCheck(browser, origin, track) {
     });
     const page = await ctx.newPage();
     track(page);
-    await ready(page, origin + '/');
+    await ready(page, `${origin}/`);
     await page.waitForFunction(() => window.pitchLab?.snapshot);
     if (!(await page.locator('#welcome').isHidden()))
       await page.getByRole('button', { name: 'Open the flight laboratory instead' }).click();
     await page.locator('#pitch-lab').scrollIntoViewIfNeeded();
     const sizes = await page.evaluate(() => {
       const root = document.getElementById('pitch-lab');
+      if (!root) throw new Error('missing #pitch-lab');
       const texts = [...root.querySelectorAll('*')].filter(
         (el) =>
-          [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) &&
+          [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent?.trim()) &&
           el.getClientRects().length,
       );
       const targets = [...root.querySelectorAll('button,input')]
@@ -674,9 +759,10 @@ async function pitchLabCheck(browser, origin, track) {
       `${name}: default margin shows two oscillations (${snap.spWn})`,
     );
     check(
-      (await page.locator('#pl-sp').textContent()).startsWith(snap.spWn.toFixed(3)),
+      (await page.locator('#pl-sp').textContent())?.startsWith(snap.spWn.toFixed(3)),
       `${name}: short-period readout is the C value`,
     );
+    /** @param {string} id */
     const press = (id) => (phone ? page.locator(id).tap() : page.locator(id).click());
     await press('#pl-step');
     await page.clock.runFor(12600);
@@ -695,7 +781,7 @@ async function pitchLabCheck(browser, origin, track) {
     await page.locator('#pl-margin').fill('-0.05');
     snap = await lab(page);
     check(
-      snap.unstable && snap.lambda > 0.3 && /Diverges/.test(snap.verdict),
+      snap.unstable && snap.lambda > 0.3 && /Diverges/.test(snap.verdict ?? ''),
       `${name}: behind the neutral point the verdict is divergence (${snap.lambda})`,
     );
     await press('#pl-kick');

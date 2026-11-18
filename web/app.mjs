@@ -1,7 +1,34 @@
 import createFlight from './physics.mjs';
 
 /* Only presentation and input live here. Every state value, integration step and story number is C. */
-const $ = (id) => document.getElementById(id);
+/** @param {string} id */
+const $ = (id) => {
+  const element = document.getElementById(id);
+  if (!element) throw new Error(`missing #${id}`);
+  return element;
+};
+/**
+ * @template {HTMLElement} T
+ * @param {string} id
+ * @param {{ new (): T, name: string }} type
+ * @returns {T}
+ */
+const $as = (id, type) => {
+  const element = $(id);
+  if (!(element instanceof type)) throw new Error(`#${id} is not a ${type.name}`);
+  return element;
+};
+/** @param {string} selector the buttons that match it */
+const buttonsOf = (selector) =>
+  [...document.querySelectorAll(selector)].filter(
+    (element) => element instanceof HTMLButtonElement,
+  );
+/** @param {HTMLCanvasElement} canvas */
+const context2d = (canvas) => {
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('no 2D canvas context');
+  return context;
+};
 const names = [
   'x',
   'h',
@@ -62,23 +89,27 @@ const ferryNames = [
   'trailered',
   'outHop',
 ];
-const scene = $('scene'),
-  plot = $('plot');
+const scene = $as('scene', HTMLCanvasElement),
+  plot = $as('plot', HTMLCanvasElement);
 const sky = new Image(),
   glider = new Image();
 sky.src = 'art/airfield.jpg';
 glider.src = 'art/glider-sprite.png';
-let engine,
-  state,
-  paused = true,
+/** @type {import('./physics.mjs').FlightModule | null} */
+let engine = null;
+/** @type {Record<string, number> | null} */
+let state = null;
+let paused = true,
   last = 0,
   accumulator = 0,
+  /** @type {Record<string, number>[]} */
   samples = [],
   sampleTime = -1;
 let ferry = false,
   shownScene = -2,
   command = 4,
   throttle = 0;
+/** @type {HeavyEntry[]} */
 const heavyLog = [];
 const radToDeg = 180 / Math.PI;
 const modeNames = ['MANUAL APPROACH', 'TRIMMED LANDING', 'SPEED ↔ HEIGHT'];
@@ -231,39 +262,46 @@ const HOPS = [
 ];
 
 // ------------------------------------------------------------------ state and modes
-const read = () =>
-  ferry
+/** The loaded C engine; the controls stay disabled until it is. */
+function core() {
+  if (!engine) throw new Error('the C engine is not loaded');
+  return engine;
+}
+const read = () => {
+  const engine = core();
+  return ferry
     ? Object.fromEntries(ferryNames.map((name, i) => [name, engine._fw_value(i)]))
     : Object.fromEntries(names.map((name, i) => [name, engine._lp_value(i)]));
+};
 const done = () =>
   ferry
     ? state && state.hop >= 5
     : state && (state.status !== 0 || (state.mode === 2 && state.time >= 120));
 const inScene = () => ferry && state && state.scene >= 0;
+/** @param {boolean} isFerry */
 function setMode(isFerry) {
   ferry = isFerry;
   document.body.dataset.mode = ferry ? 'ferry' : 'lab';
 }
 function syncControls() {
+  if (!state) return;
   const cmd = ferry ? command : state.command,
     thr = ferry ? throttle : state.throttle;
-  $('pitch').value = cmd;
-  $('throttle').value = thr * 100;
+  $as('pitch', HTMLInputElement).value = String(cmd);
+  $as('throttle', HTMLInputElement).value = String(thr * 100);
   $('pitch-value').textContent = `${cmd.toFixed(1)}°`;
   const noMotor = ferry && (!state.motor || state.charge <= 0);
   $('throttle-value').textContent =
     ferry && !state.motor ? 'no motor' : `${Math.round(thr * 100)}%`;
   const locked = ferry ? inScene() || done() : state.mode !== 0 || done();
-  $('pitch').disabled = locked;
-  $('throttle').disabled = locked || noMotor;
-  document.querySelectorAll('[data-adjust]').forEach((button) => (button.disabled = locked));
-  document
-    .querySelectorAll('[data-motor]')
-    .forEach((button) => (button.disabled = locked || noMotor));
+  $as('pitch', HTMLInputElement).disabled = Boolean(locked);
+  $as('throttle', HTMLInputElement).disabled = locked || noMotor;
+  for (const button of buttonsOf('[data-adjust]')) button.disabled = Boolean(locked);
+  for (const button of buttonsOf('[data-motor]')) button.disabled = locked || noMotor;
 }
 function reset(mode = 0, run = false) {
   setMode(false);
-  engine._lp_reset(mode);
+  core()._lp_reset(mode);
   state = read();
   paused = !run;
   accumulator = 0;
@@ -277,7 +315,7 @@ function reset(mode = 0, run = false) {
 }
 function startFerry() {
   setMode(true);
-  engine._fw_reset();
+  core()._fw_reset();
   command = 4;
   throttle = 0;
   heavyLog.length = 0;
@@ -292,8 +330,12 @@ function startFerry() {
   syncControls();
   render();
 }
+/**
+ * @param {number} nextCommand
+ * @param {number} nextThrottle
+ */
 function controls(nextCommand, nextThrottle) {
-  if (!engine) return;
+  if (!engine || !state) return;
   if (ferry) {
     command = Math.max(-10, Math.min(20, nextCommand));
     throttle = state.motor ? Math.max(0, Math.min(1, nextThrottle)) : 0;
@@ -331,6 +373,7 @@ function toggle() {
 
 // ------------------------------------------------------------------ scenes
 function showScene() {
+  if (!state) return;
   const box = $('story');
   const index = inScene() ? state.scene : -1;
   if (index === shownScene) return;
@@ -385,13 +428,14 @@ function showScene() {
   });
   box.scrollTop = 0;
 }
+/** @param {number} option */
 function answer(option) {
-  if (!inScene()) return;
+  if (!state || !inScene()) return;
   if (SCENES[state.scene].id === 'coast') {
     startFerry();
     return;
   }
-  engine._fw_answer(option);
+  core()._fw_answer(option);
   state = read();
   if (!state.motor) throttle = 0;
   if (state.scene < 0) {
@@ -416,32 +460,32 @@ $('welcome-lab').addEventListener('click', () => {
   $('welcome').hidden = true;
   render();
 });
-$('pitch').addEventListener('input', (event) =>
-  controls(Number(event.target.value), ferry ? throttle : state.throttle),
-);
-$('throttle').addEventListener('input', (event) =>
-  controls(ferry ? command : state.command, Number(event.target.value) / 100),
-);
-document.querySelectorAll('[data-adjust]').forEach((button) => {
-  button.addEventListener('click', () =>
-    controls(
-      (ferry ? command : state.command) + Number(button.dataset.adjust),
-      ferry ? throttle : state.throttle,
-    ),
-  );
+/** The command and throttle now: the ferry keeps its own, the laboratory reads them from C. */
+const held = () => ({
+  command: ferry || !state ? command : state.command,
+  throttle: ferry || !state ? throttle : state.throttle,
 });
-document.querySelectorAll('[data-motor]').forEach((button) => {
+$('pitch').addEventListener('input', () =>
+  controls(Number($as('pitch', HTMLInputElement).value), held().throttle),
+);
+$('throttle').addEventListener('input', () =>
+  controls(held().command, Number($as('throttle', HTMLInputElement).value) / 100),
+);
+for (const button of buttonsOf('[data-adjust]')) {
   button.addEventListener('click', () =>
-    controls(ferry ? command : state.command, Number(button.dataset.motor)),
+    controls(held().command + Number(button.dataset.adjust), held().throttle),
   );
-});
+}
+for (const button of buttonsOf('[data-motor]')) {
+  button.addEventListener('click', () => controls(held().command, Number(button.dataset.motor)));
+}
 document.addEventListener('keydown', (event) => {
   if (
     !engine ||
     event.ctrlKey ||
     event.metaKey ||
     event.altKey ||
-    event.target.matches('input,textarea,select')
+    (event.target instanceof Element && event.target.matches('input,textarea,select'))
   )
     return;
   const key = event.key.toLowerCase();
@@ -451,9 +495,9 @@ document.addEventListener('keydown', (event) => {
     if (!event.repeat) toggle();
     return;
   }
-  if (paused || done() || inScene() || (!ferry && state.mode)) return;
-  const cmd = ferry ? command : state.command,
-    thr = ferry ? throttle : state.throttle;
+  if (paused || done() || inScene() || (!ferry && state?.mode)) return;
+  const cmd = held().command,
+    thr = held().throttle;
   controls(
     cmd + (key === 'w' ? 1 : key === 's' ? -1 : 0),
     thr + (key === 'r' ? 0.05 : key === 'f' ? -0.05 : 0),
@@ -473,6 +517,7 @@ window.addEventListener('blur', () => {
 });
 
 // ------------------------------------------------------------------ drawing
+/** @param {HTMLCanvasElement} canvas */
 function canvasSize(canvas) {
   const bounds = canvas.getBoundingClientRect(),
     dpr = Math.min(devicePixelRatio || 1, 2);
@@ -482,10 +527,16 @@ function canvasSize(canvas) {
     canvas.width = w;
     canvas.height = h;
   }
-  const ctx = canvas.getContext('2d');
+  const ctx = context2d(canvas);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { ctx, w: bounds.width, h: bounds.height };
 }
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {HTMLImageElement} img
+ * @param {number} w
+ * @param {number} h
+ */
 function cover(ctx, img, w, h) {
   const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
   ctx.drawImage(
@@ -497,6 +548,7 @@ function cover(ctx, img, w, h) {
   );
 }
 function drawScene() {
+  if (!state) return;
   const { ctx, w, h } = canvasSize(scene);
   ctx.clearRect(0, 0, w, h);
   if (sky.complete && sky.naturalWidth) cover(ctx, sky, w, h);
@@ -573,6 +625,7 @@ function drawScene() {
   ctx.fillText('V', px + spriteW * 0.38 + vx + 5, py + 19 + vy);
 }
 function drawPlot() {
+  if (!state) return;
   const { ctx, w, h } = canvasSize(plot),
     left = 52,
     right = 14,
@@ -586,7 +639,9 @@ function drawPlot() {
   const runway = ferry ? state.strip : state.runway,
     length = ferry ? state.length : 300;
   const maxX = phugoid ? 120 : Math.max(runway + length + 100, state.x + 200);
+  /** @param {number} value */
   const x = (value) => left + (value / maxX) * (w - left - right);
+  /** @param {number} value */
   const y = (value) => top + ((maxY - value) / (maxY - minY)) * (h - top - bottom);
   ctx.clearRect(0, 0, w, h);
   ctx.font = '15px system-ui';
@@ -651,7 +706,8 @@ function drawPlot() {
     : phugoid
       ? 'Speed becomes height'
       : 'The path you fly';
-  $('chart-legend').lastChild.textContent = phugoid ? ' Airspeed V [m/s]' : ' Altitude h [m]';
+  const legend = $('chart-legend').lastChild;
+  if (legend) legend.textContent = phugoid ? ' Airspeed V [m/s]' : ' Altitude h [m]';
   plot.setAttribute(
     'aria-label',
     phugoid
@@ -667,6 +723,7 @@ function drawPlot() {
 
 // ------------------------------------------------------------------ readouts
 function renderFerry() {
+  if (!state) return;
   const hop = Math.min(state.hop, 4),
     arrived = state.hop >= 5;
   $('mode-name').textContent = 'THE LAST FERRY';
@@ -706,9 +763,9 @@ function renderFerry() {
   $('scene-caption').textContent = arrived ? 'The ferry is over' : `${HOPS[hop]}`;
   $('view-corner').textContent =
     state.wind < 0 ? `HEADWIND ${(-state.wind).toFixed(0)} m/s` : 'NO WIND';
-  $('low').hidden = !state.lowOn || inScene() || done();
+  $('low').hidden = Boolean(!state.lowOn || inScene() || done());
   const banner = $('banner');
-  banner.hidden = !state.banner || inScene();
+  banner.hidden = Boolean(!state.banner || inScene());
   banner.textContent =
     state.banner === 1
       ? 'STRIP MADE'
@@ -731,7 +788,11 @@ function renderFerry() {
 // Words only, from the C state already read. The same strings fill #goal-line / #next-step and are returned by
 // __tmGate.objective() / hint(). `target` names the control the next step asks for; it is outlined on screen.
 const STALL_DEG = 14.9;
+/** @param {number} metres */
 const km = (metres) => `${(Math.max(0, metres) / 1000).toFixed(1)} km`;
+/**
+ * @param {{ x: number, h: number, sink: number, stall: number, cmd: number, thr: number, strip: number, length: number, motorLeft: boolean, low: boolean }} now
+ */
 function flightStep({ x, h, sink, stall, cmd, thr, strip, length, motorLeft, low }) {
   const over = x >= strip,
     past = x > strip + length,
@@ -935,14 +996,18 @@ function guide() {
   };
 }
 // The element a target names: the phone's quick row when it is on screen, else the control panel.
-const visible = (el) => el && !el.disabled && el.getClientRects().length > 0;
+/** @param {Element | null | undefined} el */
+const visible = (el) =>
+  el instanceof Element && !('disabled' in el && el.disabled) && el.getClientRects().length > 0;
+/** @param {string | null} target */
 function targetElement(target) {
+  /** @param {(Element | null)[]} els */
   const pick = (...els) => els.find(visible) || null;
   switch (target) {
     case 'welcome':
       return pick($('welcome-start'));
     case 'answer':
-      return pick($('story-options').firstChild);
+      return pick($('story-options').firstElementChild);
     case 'toggle':
       return pick($('toggle'));
     case 'down':
@@ -961,6 +1026,7 @@ function targetElement(target) {
       return null;
   }
 }
+/** @type {{ goal: string, next: string, tone: string, target: string | null }} */
 let guideNow = { goal: '', next: '', tone: '', target: null };
 function renderGuide() {
   const g = guide();
@@ -975,6 +1041,7 @@ function renderGuide() {
   guideNow = g;
 }
 function render() {
+  if (!state) return;
   if (ferry) renderFerry();
   else {
     $('mode-name').textContent = modeNames[state.mode];
@@ -1019,44 +1086,50 @@ function render() {
   $('drag').textContent = `${state.drag.toFixed(0)} N`;
   $('alpha').textContent = `${(state.alpha * radToDeg).toFixed(1)}°`;
   $('gamma').textContent = `${(state.gamma * radToDeg).toFixed(1)}°`;
-  $('stall').hidden = !state.stall || inScene();
+  $('stall').hidden = Boolean(!state.stall || inScene());
   $('toggle').setAttribute('aria-pressed', String(!paused));
-  $('toggle').disabled = inScene();
+  $as('toggle', HTMLButtonElement).disabled = Boolean(inScene());
   syncControls();
   renderGuide();
   drawScene();
   drawPlot();
   // Read-only observation; tests advance the real UI clock and exercise the C exports.
-  window.liftView = {
-    snapshot: {
-      ...state,
-      paused,
-      ferry,
-      artReady: Boolean(sky.naturalWidth && glider.naturalWidth),
-      samples: samples.length,
-      sceneId: inScene() ? SCENES[state.scene].id : null,
-      sceneText: $('story').hidden ? '' : $('story-text').textContent,
-      bannerShown: !$('banner').hidden,
-      bannerText: $('banner').textContent,
-      heavyLog: heavyLog.map((h) => ({ ...h })),
-      welcome: !$('welcome').hidden,
-      inputCommand: command,
-      inputThrottle: throttle,
-      guide: {
-        goal: guideNow.goal,
-        next: guideNow.next,
-        tone: guideNow.tone,
-        target: guideNow.target,
+  Object.defineProperty(window, 'liftView', {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: {
+      snapshot: {
+        ...state,
+        paused,
+        ferry,
+        artReady: Boolean(sky.naturalWidth && glider.naturalWidth),
+        samples: samples.length,
+        sceneId: inScene() ? SCENES[state.scene].id : null,
+        sceneText: $('story').hidden ? '' : $('story-text').textContent,
+        bannerShown: !$('banner').hidden,
+        bannerText: $('banner').textContent,
+        heavyLog: heavyLog.map((h) => ({ ...h })),
+        welcome: !$('welcome').hidden,
+        inputCommand: command,
+        inputThrottle: throttle,
+        guide: {
+          goal: guideNow.goal,
+          next: guideNow.next,
+          tone: guideNow.tone,
+          target: guideNow.target,
+        },
       },
+      engine,
     },
-    engine,
-  };
+  });
 }
+/** @param {number} timestamp */
 function frame(timestamp) {
   if (!last) last = timestamp;
   const dt = Math.min((timestamp - last) / 1000, 0.25);
   last = timestamp;
-  if (engine && !paused && !done() && !inScene()) {
+  if (engine && state && !paused && !done() && !inScene()) {
     accumulator += dt;
     while (accumulator >= 0.02 && !done() && !inScene()) {
       if (ferry) {
@@ -1103,15 +1176,14 @@ new ResizeObserver(() => {
 new ResizeObserver(() =>
   document.documentElement.style.setProperty('--guide-h', `${$('guide').offsetHeight}px`),
 ).observe($('guide'));
-$('pitch').disabled = $('throttle').disabled = true;
-document
-  .querySelectorAll('[data-adjust],[data-motor]')
-  .forEach((button) => (button.disabled = true));
+$as('pitch', HTMLInputElement).disabled = $as('throttle', HTMLInputElement).disabled = true;
+for (const button of buttonsOf('[data-adjust],[data-motor]')) button.disabled = true;
 
 // Common test hook of the playability gate (touch-only phone checks). Read-only.
 // Logical units are the scene canvas's CSS pixels. DOM words and buttons are measured by the gate directly.
+/** @param {Element | null} el */
 function fromCanvas(el) {
-  if (!el || el.hidden || !el.getClientRects().length) return null;
+  if (!el || (el instanceof HTMLElement && el.hidden) || !el.getClientRects().length) return null;
   const c = scene.getBoundingClientRect(),
     r = el.getBoundingClientRect();
   return { x: r.left + r.width / 2 - c.left, y: r.top + r.height / 2 - c.top };
@@ -1149,7 +1221,7 @@ window.__tmGate = {
 try {
   engine = await createFlight();
   for (const id of ['toggle', 'reset', 'glide', 'phugoid', 'ferry', 'welcome-start', 'welcome-lab'])
-    $(id).disabled = false;
+    $as(id, HTMLButtonElement).disabled = false;
   $('welcome').hidden = false;
   reset();
   requestAnimationFrame(frame);

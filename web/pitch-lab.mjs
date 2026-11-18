@@ -2,7 +2,29 @@ import createFlight from './physics.mjs';
 
 /* The pitch laboratory: the rigid-body model of src/pitch.c through src/pitch_lab.c. JavaScript only draws and
  * passes the slider values; trim, integration and eigenvalues are computed in C. */
-const $ = (id) => document.getElementById(id);
+/** @param {string} id */
+const $ = (id) => {
+  const element = document.getElementById(id);
+  if (!element) throw new Error(`missing #${id}`);
+  return element;
+};
+/**
+ * @template {HTMLElement} T
+ * @param {string} id
+ * @param {{ new (): T, name: string }} type
+ * @returns {T}
+ */
+const $as = (id, type) => {
+  const element = $(id);
+  if (!(element instanceof type)) throw new Error(`#${id} is not a ${type.name}`);
+  return element;
+};
+/** @param {HTMLCanvasElement} canvas */
+const context2d = (canvas) => {
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('no 2D canvas context');
+  return context;
+};
 // Same order as the enum in src/pitch_lab.h.
 const names = [
   'time',
@@ -32,16 +54,26 @@ const names = [
   'im3',
 ];
 const RUN = 12; // seconds of simulated time per experiment
-let engine,
-  lab,
-  running = false,
+/** @type {import('./physics.mjs').FlightModule | null} */
+let engine = null;
+/** @type {Record<string, number> | null} */
+let lab = null;
+let running = false,
   last = 0,
   acc = 0,
+  /** @type {Record<string, number>[]} */
   trace = [],
   experiment = 'trim';
+/** The loaded C engine; the controls stay disabled until it is. */
+function core() {
+  if (!engine) throw new Error('the C engine is not loaded');
+  return engine;
+}
 
-const read = () => Object.fromEntries(names.map((name, i) => [name, engine._pl_value(i)]));
+const read = () => Object.fromEntries(names.map((name, i) => [name, core()._pl_value(i)]));
+/** @type {(x: number, d: number) => string} */
 const fmt = (x, d) => (Number.isFinite(x) ? x.toFixed(d) : '—');
+/** @param {HTMLCanvasElement} canvas */
 function size(canvas) {
   const b = canvas.getBoundingClientRect(),
     dpr = Math.min(devicePixelRatio || 1, 2);
@@ -51,38 +83,40 @@ function size(canvas) {
     canvas.width = w;
     canvas.height = h;
   }
-  const ctx = canvas.getContext('2d');
+  const ctx = context2d(canvas);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.font = '14px system-ui,-apple-system,Segoe UI,sans-serif';
   return { ctx, w: b.width, h: b.height };
 }
 
 function reset() {
-  engine._pl_reset(Number($('pl-margin').value));
+  core()._pl_reset(Number($as('pl-margin', HTMLInputElement).value));
   lab = read();
   trace = [{ ...lab }];
   running = false;
   acc = 0;
   experiment = 'trim';
 }
+/** @param {string} kind */
 function start(kind) {
   reset();
   experiment = kind;
-  if (kind === 'step') engine._pl_elevator(Number($('pl-elevator').value));
-  else engine._pl_kick(6);
+  if (kind === 'step') core()._pl_elevator(Number($as('pl-elevator', HTMLInputElement).value));
+  else core()._pl_kick(6);
   lab = read();
   trace = [{ ...lab }];
   running = true;
   last = 0;
   render();
 }
+/** @param {number} timestamp */
 function step(timestamp) {
   if (running) {
     if (!last) last = timestamp;
     acc += Math.min((timestamp - last) / 1000, 0.25);
     last = timestamp;
     while (acc >= 0.02 && running) {
-      engine._pl_step(1);
+      core()._pl_step(1);
       acc -= 0.02;
       lab = read();
       trace.push({ ...lab });
@@ -95,7 +129,8 @@ function step(timestamp) {
 
 // Attitude: the horizon, the glider at its pitch attitude theta, the velocity along gamma, alpha between them.
 function drawAttitude() {
-  const { ctx, w, h } = size($('pl-attitude')),
+  if (!lab) return;
+  const { ctx, w, h } = size($as('pl-attitude', HTMLCanvasElement)),
     cx = w * 0.55,
     cy = h * 0.55,
     len = Math.min(w * 0.3, h * 0.45, 140);
@@ -180,7 +215,8 @@ function drawAttitude() {
 
 // Alpha and q against time, two panels with their own axes and units.
 function drawTrace() {
-  const { ctx, w, h } = size($('pl-trace')),
+  if (!lab) return;
+  const { ctx, w, h } = size($as('pl-trace', HTMLCanvasElement)),
     left = 56,
     right = w - 12,
     mid = h / 2;
@@ -196,6 +232,7 @@ function drawTrace() {
     },
     { key: 'q', label: 'q [deg/s]', color: '#a3473a', top: mid + 20, bottom: h - 48, extra: 0 },
   ];
+  /** @param {number} t */
   const tx = (t) => left + ((right - left) * t) / RUN;
   for (const p of panels) {
     let lo = Infinity,
@@ -215,6 +252,7 @@ function drawTrace() {
     const pad = (hi - lo) * 0.08;
     lo -= pad;
     hi += pad;
+    /** @param {number} v */
     const ty = (v) => p.bottom - ((p.bottom - p.top) * (v - lo)) / (hi - lo);
     ctx.strokeStyle = '#d9dfd7';
     ctx.lineWidth = 1;
@@ -240,9 +278,10 @@ function drawTrace() {
     ctx.strokeStyle = p.color;
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    trace.forEach((s, i) =>
-      i ? ctx.lineTo(tx(s.time), ty(s[p.key])) : ctx.moveTo(tx(s.time), ty(s[p.key])),
-    );
+    trace.forEach((s, i) => {
+      if (i) ctx.lineTo(tx(s.time), ty(s[p.key]));
+      else ctx.moveTo(tx(s.time), ty(s[p.key]));
+    });
     ctx.stroke();
   }
   ctx.fillStyle = '#566663';
@@ -259,7 +298,8 @@ function drawTrace() {
 
 // The four eigenvalues in the complex plane, with the two-state approximation of the short period.
 function drawRoots() {
-  const { ctx, w, h } = size($('pl-roots')),
+  if (!lab) return;
+  const { ctx, w, h } = size($as('pl-roots', HTMLCanvasElement)),
     left = 48,
     right = w - 14,
     top = 30,
@@ -267,9 +307,11 @@ function drawRoots() {
   const x0 = -6,
     x1 = 1,
     y0 = -5,
-    y1 = 5,
-    X = (v) => left + ((right - left) * (v - x0)) / (x1 - x0),
-    Y = (v) => bottom - ((bottom - top) * (v - y0)) / (y1 - y0);
+    y1 = 5;
+  /** @param {number} v */
+  const X = (v) => left + ((right - left) * (v - x0)) / (x1 - x0);
+  /** @param {number} v */
+  const Y = (v) => bottom - ((bottom - top) * (v - y0)) / (y1 - y0);
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#fbe9e6';
   ctx.fillRect(X(0), top, right - X(0), bottom - top);
@@ -297,6 +339,12 @@ function drawRoots() {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'bottom';
   ctx.fillText('imaginary [rad/s]', left, top - 6);
+  /**
+   * @param {number} re
+   * @param {number} im
+   * @param {string} color
+   * @param {boolean} filled
+   */
   const dot = (re, im, color, filled) => {
     const x = Math.min(right, Math.max(left, X(re))),
       y = Math.min(bottom, Math.max(top, Y(im)));
@@ -325,11 +373,12 @@ function drawRoots() {
 
 function render() {
   if (!lab) return;
-  $('pl-margin-value').textContent = Number($('pl-margin').value).toFixed(2);
-  const e = Number($('pl-elevator').value);
+  $('pl-margin-value').textContent = Number($as('pl-margin', HTMLInputElement).value).toFixed(2);
+  const e = Number($as('pl-elevator', HTMLInputElement).value);
   $('pl-elevator-value').textContent = `${e > 0 ? '+' : ''}${e.toFixed(1)}°`;
-  const unstable = [0, 1, 2, 3].some((i) => lab[`re${i}`] > 1e-9);
-  const lambda = Math.max(...[0, 1, 2, 3].map((i) => lab[`re${i}`]));
+  const now = lab;
+  const unstable = [0, 1, 2, 3].some((i) => now[`re${i}`] > 1e-9);
+  const lambda = Math.max(...[0, 1, 2, 3].map((i) => now[`re${i}`]));
   $('pl-sp').textContent = lab.oscillatory
     ? `${fmt(lab.spWn, 3)} rad/s · ζ ${fmt(lab.spZeta, 3)}`
     : 'not an oscillation';
@@ -359,18 +408,23 @@ function render() {
   drawAttitude();
   drawTrace();
   drawRoots();
-  window.pitchLab = {
-    snapshot: {
-      ...lab,
-      running,
-      experiment,
-      samples: trace.length,
-      unstable,
-      lambda,
-      verdict: $('pl-verdict').textContent,
-      status: $('pl-status').textContent,
+  Object.defineProperty(window, 'pitchLab', {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: {
+      snapshot: {
+        ...lab,
+        running,
+        experiment,
+        samples: trace.length,
+        unstable,
+        lambda,
+        verdict: $('pl-verdict').textContent,
+        status: $('pl-status').textContent,
+      },
     },
-  };
+  });
 }
 
 $('pl-margin').addEventListener('input', () => {
@@ -387,8 +441,11 @@ $('pl-reset').addEventListener('click', () => {
 for (const id of ['pl-attitude', 'pl-trace', 'pl-roots']) new ResizeObserver(render).observe($(id));
 try {
   engine = await createFlight();
-  for (const id of ['pl-margin', 'pl-elevator', 'pl-step', 'pl-kick', 'pl-reset'])
-    $(id).disabled = false;
+  for (const id of ['pl-margin', 'pl-elevator', 'pl-step', 'pl-kick', 'pl-reset']) {
+    const control = $(id);
+    if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement)
+      control.disabled = false;
+  }
   reset();
   render();
   requestAnimationFrame(step);
