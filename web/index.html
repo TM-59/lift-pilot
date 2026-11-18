@@ -35,31 +35,31 @@
           <p class="eyebrow">THE LAST FERRY</p>
           <h3>Fly the club's last motor glider down the valley.</h3>
           <p>Five hops, strip to strip, to the buyer on the coast. The same flight model as the laboratory below.</p>
-          <button id="welcome-start" class="go" disabled>Fly the last ferry <span aria-hidden="true">↗</span></button>
-          <button id="welcome-lab" class="quiet-button" disabled>Open the flight laboratory instead</button>
+          <button type="button" id="welcome-start" class="go" disabled>Fly the last ferry <span aria-hidden="true">↗</span></button>
+          <button type="button" id="welcome-lab" class="quiet-button" disabled>Open the flight laboratory instead</button>
         </div>
         <div id="story" hidden aria-live="polite">
-          <h3 id="story-title"></h3>
+          <h3 id="story-title">Scene</h3>
           <div id="story-text"></div>
           <div id="story-options"></div>
         </div>
       </div>
-      <div class="quick" aria-label="Quick controls">
-        <button data-adjust="-1" aria-label="Nose down">− Nose</button><button data-adjust="1" aria-label="Nose up">+ Nose</button>
-        <button data-motor="0" aria-label="Motor off">Motor 0%</button><button data-motor="1" aria-label="Motor full">Motor 100%</button>
-      </div>
-      <div class="telemetry" id="lab-telemetry" aria-label="Flight instruments">
+      <fieldset class="quick" aria-label="Quick controls">
+        <button type="button" data-adjust="-1" aria-label="Nose down">− Nose</button><button type="button" data-adjust="1" aria-label="Nose up">+ Nose</button>
+        <button type="button" data-motor="0" aria-label="Motor off">Motor 0%</button><button type="button" data-motor="1" aria-label="Motor full">Motor 100%</button>
+      </fieldset>
+      <section class="telemetry" id="lab-telemetry" aria-label="Flight instruments">
         <div><span>AIRSPEED</span><strong id="airspeed">—</strong><small>m/s</small></div>
         <div><span>ALTITUDE</span><strong id="altitude">—</strong><small>m</small></div>
         <div><span>SINK RATE ↓</span><strong id="sink">—</strong><small>m/s</small><small class="note">under 2 m/s to land</small></div>
         <div><span>LIFT / DRAG</span><strong id="ld">—</strong><small>ratio</small><small class="note">m forward per m down</small></div>
-      </div>
-      <div class="telemetry ferry-only" id="ferry-telemetry" aria-label="Ferry instruments">
+      </section>
+      <section class="telemetry ferry-only" id="ferry-telemetry" aria-label="Ferry instruments">
         <div><span>TO THE STRIP</span><strong id="f-strip">—</strong><small>km</small></div>
         <div id="glide-cell"><span>GLIDE NEEDED / MADE</span><strong id="f-glide">—</strong><small class="note">m forward per m down · LOW when needed &gt; made</small></div>
         <div><span>BATTERY</span><strong id="f-charge">—</strong><small id="f-charge-unit">s of motor</small></div>
         <div><span>ALTITUDE · AIRSPEED</span><strong id="f-height">—</strong><small id="f-speed">—</small></div>
-      </div>
+      </section>
     </section>
     <aside class="control-panel" aria-label="Flight controls">
       <p class="eyebrow" id="controls-eyebrow">YOUR CONTROLS</p><h2 id="controls-title">Small inputs.<br>Watch what follows.</h2>
@@ -67,15 +67,15 @@
       <label for="pitch">Nose: angle of attack <output id="pitch-value" for="pitch">4.0°</output></label>
       <input id="pitch" type="range" min="-10" max="20" step="0.5" value="4">
       <div class="range-ends"><span>−10°</span><span>stall at 14.9°</span><span>20°</span></div>
-      <div class="adjust"><button data-adjust="-1" aria-label="Decrease angle of attack">− <kbd>S</kbd></button><button data-adjust="1" aria-label="Increase angle of attack">+ <kbd>W</kbd></button></div>
+      <div class="adjust"><button type="button" data-adjust="-1" aria-label="Decrease angle of attack">− <kbd>S</kbd></button><button type="button" data-adjust="1" aria-label="Increase angle of attack">+ <kbd>W</kbd></button></div>
       <label for="throttle" id="throttle-label">Motor (throttle) <output id="throttle-value" for="throttle">0%</output></label>
       <input id="throttle" type="range" min="0" max="100" step="5" value="0">
       <div class="range-ends"><span>Glide</span><span><kbd>F</kbd> / <kbd>R</kbd></span><span>Full</span></div>
       <p class="control-note" id="control-note">Pitch commands the angle of attack, not the flight path. Give the aircraft time to respond.</p>
-      <button id="toggle" class="primary" disabled>Start flying <span aria-hidden="true">↗</span></button>
-      <div class="secondary-actions"><button id="reset" disabled>Reset flight</button><span><kbd>P</kbd> pause</span></div>
-      <div class="experiment"><p class="eyebrow">THE LAST FERRY</p><button id="ferry" disabled>Fly the last ferry <span aria-hidden="true">→</span></button>
-        <p class="eyebrow">OR WATCH AN EXPERIMENT</p><button id="glide" disabled>Trimmed landing <span aria-hidden="true">→</span></button><button id="phugoid" disabled>Speed ↔ height <span aria-hidden="true">→</span></button><p id="experiment-note">An unpowered approach from 100 m. Land with sink below 2 m/s and a shallow path angle.</p></div>
+      <button type="button" id="toggle" class="primary" disabled>Start flying <span aria-hidden="true">↗</span></button>
+      <div class="secondary-actions"><button type="button" id="reset" disabled>Reset flight</button><span><kbd>P</kbd> pause</span></div>
+      <div class="experiment"><p class="eyebrow">THE LAST FERRY</p><button type="button" id="ferry" disabled>Fly the last ferry <span aria-hidden="true">→</span></button>
+        <p class="eyebrow">OR WATCH AN EXPERIMENT</p><button type="button" id="glide" disabled>Trimmed landing <span aria-hidden="true">→</span></button><button type="button" id="phugoid" disabled>Speed ↔ height <span aria-hidden="true">→</span></button><p id="experiment-note">An unpowered approach from 100 m. Land with sink below 2 m/s and a shallow path angle.</p></div>
     </aside>
   </div>
   <section class="analysis-grid" aria-label="Measured physics">
@@ -93,7 +93,7 @@
         <label for="pl-elevator">Elevator step from trim (+ = trailing edge down, nose down) <output id="pl-elevator-value" for="pl-elevator">−1.0°</output></label>
         <input id="pl-elevator" type="range" min="-3" max="3" step="0.5" value="-1" disabled>
         <div class="range-ends"><span>−3° nose up</span><span>+3° nose down</span></div>
-        <div class="pl-buttons"><button id="pl-step" class="primary" disabled>Step the elevator</button><button id="pl-kick" disabled>Kick the nose (+6°/s)</button><button id="pl-reset" disabled>Reset to trim</button></div>
+        <div class="pl-buttons"><button type="button" id="pl-step" class="primary" disabled>Step the elevator</button><button type="button" id="pl-kick" disabled>Kick the nose (+6°/s)</button><button type="button" id="pl-reset" disabled>Reset to trim</button></div>
         <p id="pl-status" role="status">Loading the flight model…</p>
         <dl class="pl-readouts">
           <div><dt>Short period, eigenvalue</dt><dd id="pl-sp">—</dd></div>
