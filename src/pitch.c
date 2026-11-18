@@ -7,26 +7,24 @@ PitchAircraft pitch_default(void)
 {
     PitchAircraft p = {
         .base = glider_default(),
-        .chord = 1.0, .inertia = 400.0, .static_margin = 0.15,
-        .cm0 = 0.05, .cm_q = -10.0, .cm_de = -1.2,
+        .chord = 1.0,
+        .inertia = 400.0,
+        .static_margin = 0.15,
+        .cm0 = 0.05,
+        .cm_q = -10.0,
+        .cm_de = -1.2,
     };
     return p;
 }
 
-double pitch_cm_alpha(const PitchAircraft *p)
-{
-    return -p->base.cl_alpha * p->static_margin;
-}
+double pitch_cm_alpha(const PitchAircraft *p) { return -p->base.cl_alpha * p->static_margin; }
 
 double pitch_moment_coeff(const PitchAircraft *p, double alpha, double qhat, double elevator)
 {
     return p->cm0 + pitch_cm_alpha(p) * alpha + p->cm_q * qhat + p->cm_de * elevator;
 }
 
-double pitch_alpha(const PitchState *s)
-{
-    return s->theta - s->gamma;
-}
+double pitch_alpha(const PitchState *s) { return s->theta - s->gamma; }
 
 double pitch_trim_elevator(const PitchAircraft *p, double alpha)
 {
@@ -48,8 +46,10 @@ void pitch_trim(const PitchAircraft *p, double alpha, PitchState *s)
     s->q = 0.0;
 }
 
-static void pitch_derivative(const PitchAircraft *p, const PitchState *s, double elevator, double throttle, PitchState *d)
+static void pitch_derivative(const PitchAircraft *p, const PitchState *s, const PitchControl *c,
+                             PitchState *d)
 {
+    double elevator = c->elevator, throttle = c->throttle;
     const Aircraft *a = &p->base;
     State point = {s->x, s->h, s->v, s->gamma, pitch_alpha(s)};
     double l = lift_force(a, &point), dr = drag_force(a, &point), thrust = throttle * a->max_thrust;
@@ -65,21 +65,21 @@ static void pitch_derivative(const PitchAircraft *p, const PitchState *s, double
 
 static PitchState pitch_advance(const PitchState *s, const PitchState *d, double dt)
 {
-    PitchState n = {s->x + d->x * dt, s->h + d->h * dt, s->v + d->v * dt,
+    PitchState n = {s->x + d->x * dt,         s->h + d->h * dt,         s->v + d->v * dt,
                     s->gamma + d->gamma * dt, s->theta + d->theta * dt, s->q + d->q * dt};
     return n;
 }
 
-void pitch_step(const PitchAircraft *p, PitchState *s, double elevator, double throttle, double dt)
+void pitch_step(const PitchAircraft *p, PitchState *s, PitchControl c, double dt)
 {
     PitchState k1, k2, k3, k4;
-    pitch_derivative(p, s, elevator, throttle, &k1);
+    pitch_derivative(p, s, &c, &k1);
     PitchState s2 = pitch_advance(s, &k1, dt / 2.0);
-    pitch_derivative(p, &s2, elevator, throttle, &k2);
+    pitch_derivative(p, &s2, &c, &k2);
     PitchState s3 = pitch_advance(s, &k2, dt / 2.0);
-    pitch_derivative(p, &s3, elevator, throttle, &k3);
+    pitch_derivative(p, &s3, &c, &k3);
     PitchState s4 = pitch_advance(s, &k3, dt);
-    pitch_derivative(p, &s4, elevator, throttle, &k4);
+    pitch_derivative(p, &s4, &c, &k4);
     s->x += dt / 6.0 * (k1.x + 2 * k2.x + 2 * k3.x + k4.x);
     s->h += dt / 6.0 * (k1.h + 2 * k2.h + 2 * k3.h + k4.h);
     s->v += dt / 6.0 * (k1.v + 2 * k2.v + 2 * k3.v + k4.v);
@@ -102,55 +102,84 @@ void pitch_jacobian(const PitchAircraft *p, const PitchState *trim, double eleva
         PitchState up = *trim, down = *trim, du, dd;
         *slot(&up, j) += eps;
         *slot(&down, j) -= eps;
-        pitch_derivative(p, &up, elevator, 0.0, &du);
-        pitch_derivative(p, &down, elevator, 0.0, &dd);
-        for (int i = 0; i < 4; i++) a[i][j] = (*slot(&du, i) - *slot(&dd, i)) / (2.0 * eps);
+        pitch_derivative(p, &up, &(PitchControl){.elevator = elevator, .throttle = 0.0}, &du);
+        pitch_derivative(p, &down, &(PitchControl){.elevator = elevator, .throttle = 0.0}, &dd);
+        for (int i = 0; i < 4; i++) {
+            a[i][j] = (*slot(&du, i) - *slot(&dd, i)) / (2.0 * eps);
+        }
     }
 }
 
-void pitch_eigen(double a[4][4], double re[4], double im[4])
+void pitch_eigen(double a[4][4], EigenOut out)
 {
-    /* Faddeev-LeVerrier: det(lambda I - A) = lambda^4 + c[1] lambda^3 + c[2] lambda^2 + c[3] lambda + c[4]. */
+    double *re = out.re, *im = out.im;
+    /* Faddeev-LeVerrier: det(lambda I - A) = lambda^4 + c[1] lambda^3 + c[2] lambda^2 + c[3] lambda
+     * + c[4]. */
     double m[4][4] = {{0}}, am[4][4], c[5] = {1.0, 0, 0, 0, 0};
     for (int k = 1; k <= 4; k++) {
-        for (int i = 0; i < 4; i++)
-            for (int j = 0; j < 4; j++) m[i][j] += (i == j) * c[k - 1];
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                m[i][j] += (i == j) * c[k - 1];
+            }
+        }
         double tr = 0.0;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
                 am[i][j] = 0.0;
-                for (int l = 0; l < 4; l++) am[i][j] += a[i][l] * m[l][j];
+                for (int l = 0; l < 4; l++) {
+                    am[i][j] += a[i][l] * m[l][j];
+                }
             }
-        for (int i = 0; i < 4; i++) tr += am[i][i];
+        }
+        for (int i = 0; i < 4; i++) {
+            tr += am[i][i];
+        }
         c[k] = -tr / k;
-        for (int i = 0; i < 4; i++)
-            for (int j = 0; j < 4; j++) m[i][j] = am[i][j];
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                m[i][j] = am[i][j];
+            }
+        }
     }
     /* Durand-Kerner on the monic quartic. */
     double complex z[4], start = 0.4 + 0.9 * I;
     double radius = 1.0;
-    for (int k = 1; k <= 4; k++) radius = fmax(radius, pow(fabs(c[k]), 1.0 / k));
-    for (int i = 0; i < 4; i++) z[i] = radius * cpow(start, i);
+    for (int k = 1; k <= 4; k++) {
+        radius = fmax(radius, pow(fabs(c[k]), 1.0 / k));
+    }
+    for (int i = 0; i < 4; i++) {
+        z[i] = radius * cpow(start, i);
+    }
     for (int it = 0; it < 500; it++) {
         double change = 0.0;
         for (int i = 0; i < 4; i++) {
-            double complex num = ((((z[i] + c[1]) * z[i] + c[2]) * z[i] + c[3]) * z[i] + c[4]), den = 1.0;
-            for (int j = 0; j < 4; j++)
-                if (j != i) den *= z[i] - z[j];
+            double complex num = ((((z[i] + c[1]) * z[i] + c[2]) * z[i] + c[3]) * z[i] + c[4]),
+                           den = 1.0;
+            for (int j = 0; j < 4; j++) {
+                if (j != i) {
+                    den *= z[i] - z[j];
+                }
+            }
             double complex step = num / den;
             z[i] -= step;
             change = fmax(change, cabs(step) / fmax(1.0, cabs(z[i])));
         }
-        if (change < 1e-15) break;
+        if (change < 1e-15) {
+            break;
+        }
     }
     /* Sort by modulus, largest first; within a pair put the positive imaginary part first. */
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 4; i++) {
         for (int j = i + 1; j < 4; j++) {
             double ai = cabs(z[i]), aj = cabs(z[j]);
-            if (aj > ai * (1.0 + 1e-9) || (fabs(aj - ai) <= ai * 1e-9 && cimag(z[j]) > cimag(z[i]))) {
-                double complex t = z[i]; z[i] = z[j]; z[j] = t;
+            if (aj > ai * (1.0 + 1e-9) ||
+                (fabs(aj - ai) <= ai * 1e-9 && cimag(z[j]) > cimag(z[i]))) {
+                double complex t = z[i];
+                z[i] = z[j];
+                z[j] = t;
             }
         }
+    }
     for (int i = 0; i < 4; i++) {
         re[i] = creal(z[i]);
         im[i] = fabs(cimag(z[i])) < 1e-12 * fmax(1.0, cabs(z[i])) ? 0.0 : cimag(z[i]);
@@ -165,16 +194,18 @@ static PitchMode mode_of(double re, double im)
     return m;
 }
 
-int pitch_modes(const PitchAircraft *p, double alpha, PitchMode *short_period, PitchMode *phugoid)
+int pitch_modes(const PitchAircraft *p, double alpha, PitchModesOut out)
 {
+    PitchMode *short_period = out.short_period, *phugoid = out.phugoid;
     PitchState s = {0.0, 1000.0, 0, 0, 0, 0};
     pitch_trim(p, alpha, &s);
     double a[4][4], re[4], im[4];
     pitch_jacobian(p, &s, pitch_trim_elevator(p, alpha), a);
-    pitch_eigen(a, re, im);
+    pitch_eigen(a, (EigenOut){.re = re, .im = im});
     *short_period = mode_of(re[0], im[0]);
     *phugoid = mode_of(re[2], im[2]);
-    int both = im[0] != 0.0 && im[2] != 0.0 && fabs(im[0] + im[1]) < 1e-9 * (1.0 + fabs(im[0])) && fabs(im[2] + im[3]) < 1e-9 * (1.0 + fabs(im[2]));
+    int both = im[0] != 0.0 && im[2] != 0.0 && fabs(im[0] + im[1]) < 1e-9 * (1.0 + fabs(im[0])) &&
+               fabs(im[2] + im[3]) < 1e-9 * (1.0 + fabs(im[2]));
     return both;
 }
 

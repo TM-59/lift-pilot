@@ -159,6 +159,8 @@ make story                     # rewrite docs/narrative/ from the story bench
 make bench                     # native trajectories and landing checks
 npm ci                         # local-only Playwright development dependency
 make smoke                     # real WASM, keyboard/touch, errors, screenshots
+make check-style               # format, lint, types (C: clang-format/clang-tidy/-Werror, Python: Ruff/mypy, JS: Biome/tsc)
+make fmt                       # write the formatting back
 ```
 
 The smoke compares native and WASM trajectories for manual flight, trimmed landing and

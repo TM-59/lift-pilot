@@ -13,6 +13,8 @@ C11 + libm の縦運動シミュレーター。物理の正典は `src/flight.c`
 - 原画の背景は装飾。実測の飛行経路には軸・単位・凡例を付ける。
 - 乱数・保存・サーバー API は無い。既存の出力と物理モデルを保持する。
 - 検証は `make test` / `make bench` / `make story-check` / `make plots` / `make web` / `make smoke`。
+- 整形・lint・型検査は `make fmt` / `make check-style`(clang-format・clang-tidy・-Werror、Ruff・mypy strict、Biome・tsc --checkJs。版は uv.lock と package-lock.json。CI の style ジョブも同じ)。抑制コメント・除外は置かない。C ライブラリのヘッダーが既定の場所に無い端末は `TIDY_EXTRA="-isystem <dir>"`。
+  Biome の対象外は書いていない生成物だけ(`make story` の docs/narrative の JSON、`make theory-figs` の values.md)。Ruff で外すのは両立しない規則の片方だけ(pyproject.toml に相手と理由)。
 - Python は 3.14、`make -j` は最大4。
 - 理論の手引きは `docs/theory/`。`make theory-figs` が図と実測値の表を `tests/theory_figs.c` から再生成し、`make theory-check` が
   対応表(文 → 頁 → 図 → 関数 → テスト)の欠け・リンク切れ・消えた関数名・未掲載の公開関数で落ちる。法則・規則を足したら同じ PR で頁と図と表を足す。

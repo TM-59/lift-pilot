@@ -2,14 +2,15 @@
 #define FLIGHT_H
 
 /* Longitudinal point-mass flight dynamics of a motor glider in still air (SI units).
- * State: x [m], h [m], airspeed V [m/s], flight path angle gamma [rad], angle of attack alpha [rad].
- * The elevator commands alpha through a first-order lag (the "short period" is not modelled). */
+ * State: x [m], h [m], airspeed V [m/s], flight path angle gamma [rad], angle of attack alpha
+ * [rad]. The elevator commands alpha through a first-order lag (the "short period" is not
+ * modelled). */
 typedef struct {
     double mass, area, rho;
     double cl0, cl_alpha, alpha_stall;
-    double cd0, k;           /* parabolic drag polar CD = cd0 + k * CL^2 */
-    double tau;              /* angle-of-attack response time [s] */
-    double max_thrust;       /* [N] */
+    double cd0, k;     /* parabolic drag polar CD = cd0 + k * CL^2 */
+    double tau;        /* angle-of-attack response time [s] */
+    double max_thrust; /* [N] */
 } Aircraft;
 
 typedef struct {
@@ -29,9 +30,14 @@ double drag_force(const Aircraft *a, const State *s);
 void trim_glide(const Aircraft *a, double alpha, State *s);
 /* Best lift-to-drag ratio from the polar: 1 / (2 sqrt(cd0 k)). */
 double best_glide_ratio(const Aircraft *a);
-/* One RK4 step; alpha_cmd in rad, throttle in 0..1. */
-void flight_step(const Aircraft *a, State *s, double alpha_cmd, double throttle, double dt);
-/* Ground contact test after a step: touchdown is gentle if the sink rate and path angle are small. */
+/* The pilot's inputs: commanded angle of attack [rad] and throttle 0..1. */
+typedef struct {
+    double alpha_cmd, throttle;
+} FlightControl;
+/* One RK4 step. */
+void flight_step(const Aircraft *a, State *s, FlightControl c, double dt);
+/* Ground contact test after a step: touchdown is gentle if the sink rate and path angle are small.
+ */
 Status check_touchdown(State *s);
 double specific_energy(const State *s);
 

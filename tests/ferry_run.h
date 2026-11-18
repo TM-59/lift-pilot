@@ -6,20 +6,37 @@
 
 #include <string.h>
 
-enum { RUN_GUARD_FRAMES = 200000 };  /* 4,000 s of flying: counted as "did not finish" */
+enum { RUN_GUARD_FRAMES = 200000 }; /* 4,000 s of flying: counted as "did not finish" */
 
 typedef struct {
     double seconds, low;
     int outlandings, completed, ending;
     int crisis[F_HOPS], failure[F_HOPS];
     int order[FS_COUNT], order_len;
-    int quiet[FS_COUNT];  /* heavy scene shown with no "strip made" banner, before or after it */
+    int quiet[FS_COUNT]; /* heavy scene shown with no "strip made" banner, before or after it */
 } RunResult;
 
-static const char *const SCENE_ID[FS_COUNT] = {"hangar", "weir", "orchard", "buyer", "mill", "doors", "coast"};
+static const char *const SCENE_ID[FS_COUNT] = {"hangar", "weir",  "orchard", "buyer",
+                                               "mill",   "doors", "coast"};
 
-static inline void run_ferry(uint64_t key, unsigned effects, int route, int pulled, RunResult *out)
+/* The answers to the two choice scenes: route 0 the quarry / 1 the ridge; pulled 0 / 1. */
+typedef struct {
+    int route;
+    int pulled;
+} Choices;
+
+/* One flight of the bench: the pilot's key, the story effects that are on, and the choices. */
+typedef struct {
+    uint64_t key;
+    unsigned effects;
+    Choices choices;
+} RunPlan;
+
+static inline void run_ferry(const RunPlan *plan, RunResult *out)
 {
+    uint64_t key = plan->key;
+    unsigned effects = plan->effects;
+    int route = plan->choices.route, pulled = plan->choices.pulled;
     Ferry f;
     Pilot p;
     memset(out, 0, sizeof *out);
@@ -36,7 +53,11 @@ static inline void run_ferry(uint64_t key, unsigned effects, int route, int pull
             if (ferry_heavy(scene)) {
                 if (f.scene == FS_NONE) {
                     double cmd = pilot_command(&p, &f, &throttle);
-                    ferry_tick(&f, 1, cmd, throttle);  /* the first frame after the scene closes */
+                    ferry_tick(
+                        &f, (FerryInput){
+                                .frames = 1,
+                                .command_degrees = cmd,
+                                .throttle = throttle}); /* the first frame after the scene closes */
                     frames++;
                 }
                 out->quiet[scene] = calm && f.loud == loud && f.banner != FB_CLEAR;
@@ -44,7 +65,7 @@ static inline void run_ferry(uint64_t key, unsigned effects, int route, int pull
             continue;
         }
         double cmd = pilot_command(&p, &f, &throttle);
-        ferry_tick(&f, 1, cmd, throttle);
+        ferry_tick(&f, (FerryInput){.frames = 1, .command_degrees = cmd, .throttle = throttle});
         frames++;
     }
     out->completed = f.hop >= F_HOPS;
@@ -52,7 +73,10 @@ static inline void run_ferry(uint64_t key, unsigned effects, int route, int pull
     out->low = f.low;
     out->outlandings = f.outlandings;
     out->ending = ferry_ending(&f);
-    for (int h = 0; h < F_HOPS; h++) { out->crisis[h] = f.crisis_hop[h]; out->failure[h] = f.out_hop[h]; }
+    for (int h = 0; h < F_HOPS; h++) {
+        out->crisis[h] = f.crisis_hop[h];
+        out->failure[h] = f.out_hop[h];
+    }
     out->order_len = f.order_len;
     memcpy(out->order, f.order, sizeof f.order);
 }
@@ -63,12 +87,15 @@ enum { SALT_SEED = 1, SALT_PLAY = 2, SALT_ABLATION = 3, SALT_TENSION = 4 };
 static inline uint64_t story_seed(int i) { return sub_seed(STORY_BASE, (uint64_t)i, SALT_SEED); }
 static inline uint64_t play_key(int i) { return sub_seed(story_seed(i), 0, SALT_PLAY); }
 static inline uint64_t ablation_key(int i) { return sub_seed(story_seed(i), 0, SALT_ABLATION); }
-static inline uint64_t tension_key(int i, int run) { return sub_seed(story_seed(i), (uint64_t)run, SALT_TENSION); }
+static inline uint64_t tension_key(int i, int run)
+{
+    return sub_seed(story_seed(i), (uint64_t)run, SALT_TENSION);
+}
 
 enum { PLAY_SEEDS = 12, ABLATION_SEEDS = 40, TENSION_SEEDS = 16, TENSION_RUNS = 12 };
 /* Default choices for the ablation rows: round Hob Ridge, and flying on whole. */
 enum { DEFAULT_ROUTE = 1, DEFAULT_PULLED = 1 };
-static inline void play_choices(int i, int *route, int *pulled) { *route = i % 2; *pulled = (i / 2) % 2; }
-static inline void tension_choices(int run, int *route, int *pulled) { *route = run % 2; *pulled = (run / 2) % 2; }
+static inline Choices play_choices(int i) { return (Choices){i % 2, (i / 2) % 2}; }
+static inline Choices tension_choices(int run) { return (Choices){run % 2, (run / 2) % 2}; }
 
 #endif
