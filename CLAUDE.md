@@ -27,6 +27,12 @@ C11 + libm の縦運動シミュレーター。物理の正典は `src/flight.c`
 - 実画面は `docs/images/`、原画と生成指示・採否は `assets/art/` と `docs/art-direction.md`。
 - 物語の再生操作(#22): 時間で流れる物語の場面は 0(場面は選択を押すまで止まり、帯・実演・時計は本編の時間)。時間で流れる場面を足す PR で、スキップ・2 倍早送り・0.5 倍遅送り・一時停止・再開を同時に入れる。
 
+## BGM(2026-11-27、Issue #29)
+
+- ブラウザー版だけに BGM。`web/bgm.mjs` の `cue()` が画面から曲を選ぶ: 入口・手動の進入・実演・pitch laboratory = valley(基調のバラード)、The Last Ferry の区間 = hop(戦闘の役、pulse、一時停止 0.4 倍)、場面 = story(0.7 倍、重い場面 0.4 倍)、The breaker's yard = yard。全部器楽。端末版・GIF・CSV/SVG は無音。
+- 曲は ACE-Step 1.5(MIT)の独自生成。`docs/bgm/plan.json` から作り、`scripts/bgm_bake.py` の門を緩めずに通した物だけ(`docs/bgm.md`)。第三者の音声は使わない。最初の操作の前は読まない。
+- 消音は ♪(44px)と M。出口(master)でも切る。`node scripts/bgm-smoke.cjs`(ローカル専用)が確かめる。
+
 ## M4 の独自原画の例外
 
 Codex built-in image_gen の独自の滑空機・飛行場原画を許可する。
