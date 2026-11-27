@@ -66,7 +66,9 @@ bench: test_observer
 	./test_observer --trace > build/native-trace.csv
 
 web: dist/physics.mjs
-	cp web/index.html web/style.css web/app.mjs web/pitch-lab.mjs dist/
+	cp web/index.html web/style.css web/app.mjs web/pitch-lab.mjs web/bgm.mjs dist/
+	mkdir -p dist/bgm
+	cp web/bgm/* dist/bgm/
 	mkdir -p dist/art
 	cp assets/art/* dist/art/
 	$(PYTHON) scripts/check_size.py

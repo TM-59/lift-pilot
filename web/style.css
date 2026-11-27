@@ -119,6 +119,25 @@
   .about-link span {
     padding-left: 12px;
   }
+  .header-end {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  /* Music on/off: 44 px, in the header so it never takes a tap meant for the controls. */
+  #mute {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    font-size: 20px;
+    line-height: 1;
+    border-radius: 50%;
+  }
+  #mute[aria-pressed="true"] {
+    text-decoration: line-through;
+    opacity: 0.6;
+  }
   .intro {
     padding: 36px 0 30px;
     display: flex;

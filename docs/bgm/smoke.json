@@ -1,0 +1,80 @@
+{
+ "checks": [
+  {
+   "what": "nothing fetched before the first press",
+   "fetched": 0
+  },
+  {
+   "what": "valley plays",
+   "cue": {
+    "track": "valley",
+    "gain": 1
+   },
+   "level": -17.5,
+   "gain": 0.45
+  },
+  {
+   "what": "story plays",
+   "cue": {
+    "track": "story",
+    "gain": 0.7
+   },
+   "level": -30.5,
+   "gain": 0.315
+  },
+  {
+   "what": "mute during a crossfade silences the fading track too",
+   "level": -120
+  },
+  {
+   "what": "hop plays",
+   "cue": {
+    "track": "hop",
+    "gain": 1
+   },
+   "level": -24.7,
+   "gain": 0.45
+  },
+  {
+   "what": "pause ducks",
+   "gain": [
+    0.45,
+    0.18000000000000002
+   ],
+   "level": [
+    -24.7,
+    -40.3
+   ]
+  },
+  {
+   "what": "♪ mutes and restores",
+   "size": {
+    "x": 1188,
+    "y": -525,
+    "width": 44,
+    "height": 44
+   },
+   "level": [
+    -120,
+    -45.9
+   ]
+  },
+  {
+   "what": "cues: heavy scenes story 0.4x, the breaker's yard and after it yard, lab and experiments valley"
+  },
+  {
+   "what": "dist bytes",
+   "bytes": 3257212
+  }
+ ],
+ "fetched": [
+  "list.json",
+  "valley.ogg",
+  "story.ogg",
+  "hop.ogg",
+  "yard.ogg"
+ ],
+ "ok": true,
+ "seconds": 20.5,
+ "when": "2026-11-27T01:34:31.577Z"
+}
