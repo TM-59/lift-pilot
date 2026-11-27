@@ -1,3 +1,4 @@
+import { BgmPlayer, cue } from './bgm.mjs';
 import createFlight from './physics.mjs';
 
 /* Only presentation and input live here. Every state value, integration step and story number is C. */
@@ -1160,6 +1161,7 @@ function frame(timestamp) {
     if (done()) paused = true;
     render();
   }
+  musicFrame();
   requestAnimationFrame(frame);
 }
 for (const img of [sky, glider])
@@ -1178,6 +1180,56 @@ new ResizeObserver(() =>
 ).observe($('guide'));
 $as('pitch', HTMLInputElement).disabled = $as('throttle', HTMLInputElement).disabled = true;
 for (const button of buttonsOf('[data-adjust],[data-motor]')) button.disabled = true;
+
+// ------------------------------------------------------------------ music (docs/bgm.md)
+// Ballad on the welcome, the laboratory, the experiments and the pitch laboratory, a pulse track
+// while flying a hop of The Last Ferry, quiet music under a scene and its own track at the
+// breaker's yard. Nothing loads before the first press. M or the ♪ button toggles the music.
+const music = new BgmPlayer();
+const muteButton = $as('mute', HTMLButtonElement);
+let muted = false;
+/** @param {boolean} value */
+function setMuted(value) {
+  muted = value;
+  muteButton.setAttribute('aria-pressed', String(muted));
+  muteButton.setAttribute('aria-label', muted ? 'Play music' : 'Mute music');
+  muteButton.title = muted ? 'Music off · M plays' : 'Music on · M mutes';
+}
+muteButton.onclick = () => setMuted(!muted);
+window.addEventListener('pointerdown', () => music.unlock(), true);
+window.addEventListener(
+  'keydown',
+  (event) => {
+    music.unlock();
+    if (
+      event.key.toLowerCase() === 'm' &&
+      !event.repeat &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !(event.target instanceof Element && event.target.matches('input,textarea,select'))
+    )
+      setMuted(!muted);
+  },
+  true,
+);
+const musicCue = () => {
+  const s = inScene() && state ? SCENES[state.scene] : null;
+  return cue({
+    ferry,
+    scene: s ? s.id : null,
+    heavy: Boolean(s?.heavy),
+    ending: Boolean(s?.endings),
+    paused,
+    over: Boolean(ferry && done()),
+  });
+};
+function musicFrame() {
+  music.set(musicCue(), muted);
+}
+Object.defineProperty(window, 'musicView', {
+  get: () => ({ cue: musicCue(), ...music.state() }),
+});
 
 // Common test hook of the playability gate (touch-only phone checks). Read-only.
 // Logical units are the scene canvas's CSS pixels. DOM words and buttons are measured by the gate directly.
