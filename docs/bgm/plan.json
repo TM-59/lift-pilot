@@ -1,0 +1,73 @@
+{
+ "note": "BGM の生成計画(lift-pilot M63 #29、親 project-context#598)。caption は音の特徴だけ(曲名・作者・作品名を書かない。musical-notation-translator の docs/copyright-policy.md)。どの場面も文字か計器を読むので全部器楽。soft の曲のループは bars × 4 × 60 / bpm ≥ 16 秒(valley 29.1・story 24.8・yard 24.0 秒)。候補は Colab の GPU で作る(local-llm-ops #260、python -m tools.colab bgm)、落ちる先は scripts/bgm_gen.py(手元の CPU)。scripts/bgm_bake.py が門・ループの切り出し・書き出し(web/bgm/)。",
+ "engine": "ACE-Step/Ace-Step1.5:acestep-v15-turbo",
+ "steps": 8,
+ "note_loop": "ループは生成の長さより十分短く取り、継ぎ目の始点を探す余地を残す。soft の曲は継ぎ目を 2 秒重ね、長さを 1 小節ずつ縮めて 16 秒以上で継ぎ目の音色の跳びが最小の物を採る。pulse は 0.12 秒(拍がずれない)。",
+ "seeds": [
+  931,
+  932,
+  933,
+  934,
+  935,
+  936
+ ],
+ "note_seeds": "seed は 1 場面 6 本。pulse の場面は caption 3 つ(頭から拍が続く指示。gravity-well #35 で前半が薄い候補が出た学び)。他の作品と同じ caption・seed を使わない(既存の plan.json の seed 11〜926 と別の 931〜936)。",
+ "scenes": {
+  "valley": {
+   "role": "基調(入口・手動の進入・実演 2 つ・pitch laboratory)",
+   "loop": true,
+   "bpm": 66,
+   "key": "D major",
+   "seconds": 44,
+   "bars": 8,
+   "mood": "soft",
+   "xf": 2.0,
+   "captions": [
+    "slow open-air ballad, soft upright piano melody, airy acoustic guitar harmonics, warm sustained string pad, gliding low over a green valley at dawn, calm and hopeful, no drums, instrumental",
+    "gentle pastoral ballad, mellow clarinet melody over soft nylon guitar arpeggios and quiet cello, light wind over grass, unhurried and kind, no percussion, instrumental"
+   ]
+  },
+  "hop": {
+   "role": "戦闘の役(The Last Ferry の 5 区間を電池と滑空比で飛ぶ間)",
+   "loop": true,
+   "bpm": 112,
+   "key": "G minor",
+   "seconds": 44,
+   "bars": 16,
+   "mood": "pulse",
+   "captions": [
+    "driving aviation track, steady kick drum on every beat from the first bar, pulsing eighth-note bass guitar, fast muted guitar ostinato, bold horn stabs, racing a headwind to the next strip, tense and bright, no intro, instrumental",
+    "propulsive flight music, tight snare and kick on every beat throughout, rolling toms, staccato low strings, rising synth lead, a small motor glider fighting the sink, determined, constant energy from start to end, instrumental",
+    "urgent cross-country glide track, full drum kit from the very first bar, galloping bass line, bright string ostinato and brass accents all the way through, no quiet sections, no breakdown, instrumental"
+   ]
+  },
+  "story": {
+   "role": "物語(The Last Ferry の場面。重い場面 buyer・mill・doors と一時停止は 0.4 倍)",
+   "loop": true,
+   "bpm": 58,
+   "key": "D major",
+   "seconds": 40,
+   "bars": 6,
+   "mood": "soft",
+   "xf": 2.0,
+   "captions": [
+    "sparse hangar underscore, soft felt piano single notes, low warm organ drone, long rests, morning light through a workshop door, quiet and reflective, no drums, instrumental",
+    "minimal tender score, slow bowed viola and a few glockenspiel notes, wide near silence, an old pilot reading a letter, no percussion, instrumental"
+   ]
+  },
+  "yard": {
+   "role": "結末(The breaker's yard の場面)",
+   "loop": true,
+   "bpm": 60,
+   "key": "G major",
+   "seconds": 40,
+   "bars": 6,
+   "mood": "soft",
+   "xf": 2.0,
+   "captions": [
+    "gentle farewell ballad, warm piano and solo oboe melody, slow swelling strings, the last landing at a quiet yard near the sea, bittersweet and grateful, no drums, instrumental",
+    "slow closing ballad, soft fingerpicked guitar and string trio, an old aircraft resting in evening light, tender and calm, no percussion, instrumental"
+   ]
+  }
+ }
+}
